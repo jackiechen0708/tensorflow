@@ -70,7 +70,7 @@ void EventMgr::PollLoop() {
   polling_stopped_.Notify();
 }
 
-void EventMgr::QueueInUse(gpu::Stream* stream, InUse iu, gpu::Event** e) {
+void EventMgr::QueueInUse(gpu::Stream* stream, InUse iu) {
   VLOG(2) << "QueueInUse  free_events_ " << free_events_.size()
           << " used_events_ " << used_events_.size();
   // Events are created on demand, and repeatedly reused.  There is no
@@ -79,9 +79,10 @@ void EventMgr::QueueInUse(gpu::Stream* stream, InUse iu, gpu::Event** e) {
     free_events_.push_back(new gpu::Event(exec_));
     free_events_.back()->Init();
   }
-  *e = free_events_.back();
+  gpu::Event* e = free_events_.back();
   free_events_.pop_back();
-  iu.event = *e;
+  stream->ThenRecordEvent(e);
+  iu.event = e;
   used_events_.push_back(iu);
 }
 

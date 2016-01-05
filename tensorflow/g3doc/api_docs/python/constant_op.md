@@ -140,10 +140,9 @@ This operation creates a tensor of shape `dims` and fills it with `value`.
 For example:
 
 ```prettyprint
-# output tensor shape needs to be [2, 3]
-# so 'dims' is [2, 3]
-fill(dims, 9) ==> [[9, 9, 9]
-                   [9, 9, 9]]
+# Output tensor has shape [2, 3].
+fill([2, 3], 9) ==> [[9, 9, 9]
+                     [9, 9, 9]]
 ```
 
 ##### Args:
@@ -319,15 +318,15 @@ shuff = tf.random_shuffle(c)
 
 # Each time we run these ops, different results are generated
 sess = tf.Session()
-print sess.run(norm)
-print sess.run(norm)
+print(sess.run(norm))
+print(sess.run(norm))
 
 # Set an op-level seed to generate repeatable sequences across sessions.
 c = tf.constant([[1, 2], [3, 4], [5, 6]])
 sess = tf.Session()
 norm = tf.random_normal(c, seed=1234)
-print sess.run(norm)
-print sess.run(norm)
+print(sess.run(norm))
+print(sess.run(norm))
 ```
 
 Another common use of random values is the initialization of variables. Also see
@@ -341,7 +340,7 @@ init = tf.initialize_all_variables()
 
 sess = tf.Session()
 sess.run(init)
-print sess.run(var)
+print(sess.run(var))
 ```
 
 - - -
@@ -402,7 +401,7 @@ deviations from the mean are dropped and re-picked.
 
 - - -
 
-### `tf.random_uniform(shape, minval=0.0, maxval=1.0, dtype=tf.float32, seed=None, name=None)` {#random_uniform}
+### `tf.random_uniform(shape, minval=0, maxval=None, dtype=tf.float32, seed=None, name=None)` {#random_uniform}
 
 Outputs random values from a uniform distribution.
 
@@ -410,15 +409,24 @@ The generated values follow a uniform distribution in the range
 `[minval, maxval)`. The lower bound `minval` is included in the range, while
 the upper bound `maxval` is excluded.
 
+For floats, the default range is `[0, 1)`.  For ints, at least `maxval` must
+be specified explicitly.
+
+In the integer case, the random integers are slightly biased unless
+`maxval - minval` is an exact power of two.  The bias is small for values of
+`maxval - minval` significantly smaller than the range of the output (either
+`2**32` or `2**64`).
+
 ##### Args:
 
 
 *  <b>`shape`</b>: A 1-D integer Tensor or Python array. The shape of the output tensor.
 *  <b>`minval`</b>: A 0-D Tensor or Python value of type `dtype`. The lower bound on the
-    range of random values to generate.
+    range of random values to generate.  Defaults to 0.
 *  <b>`maxval`</b>: A 0-D Tensor or Python value of type `dtype`. The upper bound on
-    the range of random values to generate.
-*  <b>`dtype`</b>: The type of the output.
+    the range of random values to generate.  Defaults to 1 if `dtype` is
+    floating point.
+*  <b>`dtype`</b>: The type of the output: `float32`, `float64`, `int32`, or `int64`.
 *  <b>`seed`</b>: A Python integer. Used to create a random seed for the distribution.
     See
     [`set_random_seed`](../../api_docs/python/constant_op.md#set_random_seed)
@@ -428,6 +436,11 @@ the upper bound `maxval` is excluded.
 ##### Returns:
 
   A tensor of the specified shape filled with random uniform values.
+
+##### Raises:
+
+
+*  <b>`ValueError`</b>: If `dtype` is integral and `maxval` is not specified.
 
 
 - - -
@@ -493,19 +506,19 @@ graph-level nor op-level seeds:
 a = tf.random_uniform([1])
 b = tf.random_normal([1])
 
-print "Session 1"
+print("Session 1")
 with tf.Session() as sess1:
-  print sess1.run(a)  # generates 'A1'
-  print sess1.run(a)  # generates 'A2'
-  print sess1.run(b)  # generates 'B1'
-  print sess1.run(b)  # generates 'B2'
+  print(sess1.run(a))  # generates 'A1'
+  print(sess1.run(a))  # generates 'A2'
+  print(sess1.run(b))  # generates 'B1'
+  print(sess1.run(b))  # generates 'B2'
 
-print "Session 2"
+print("Session 2")
 with tf.Session() as sess2:
-  print sess2.run(a)  # generates 'A3'
-  print sess2.run(a)  # generates 'A4'
-  print sess2.run(b)  # generates 'B3'
-  print sess2.run(b)  # generates 'B4'
+  print(sess2.run(a))  # generates 'A3'
+  print(sess2.run(a))  # generates 'A4'
+  print(sess2.run(b))  # generates 'B3'
+  print(sess2.run(b))  # generates 'B4'
 ```
 
 To generate the same repeatable sequence for an op across sessions, set the
@@ -517,19 +530,19 @@ b = tf.random_normal([1])
 
 # Repeatedly running this block with the same graph will generate the same
 # sequence of values for 'a', but different sequences of values for 'b'.
-print "Session 1"
+print("Session 1")
 with tf.Session() as sess1:
-  print sess1.run(a)  # generates 'A1'
-  print sess1.run(a)  # generates 'A2'
-  print sess1.run(b)  # generates 'B1'
-  print sess1.run(b)  # generates 'B2'
+  print(sess1.run(a))  # generates 'A1'
+  print(sess1.run(a))  # generates 'A2'
+  print(sess1.run(b))  # generates 'B1'
+  print(sess1.run(b))  # generates 'B2'
 
-print "Session 2"
+print("Session 2")
 with tf.Session() as sess2:
-  print sess2.run(a)  # generates 'A1'
-  print sess2.run(a)  # generates 'A2'
-  print sess2.run(b)  # generates 'B3'
-  print sess2.run(b)  # generates 'B4'
+  print(sess2.run(a))  # generates 'A1'
+  print(sess2.run(a))  # generates 'A2'
+  print(sess2.run(b))  # generates 'B3'
+  print(sess2.run(b))  # generates 'B4'
 ```
 
 To make the random sequences generated by all ops be repeatable across
@@ -542,19 +555,19 @@ b = tf.random_normal([1])
 
 # Repeatedly running this block with the same graph will generate different
 # sequences of 'a' and 'b'.
-print "Session 1"
+print("Session 1")
 with tf.Session() as sess1:
-  print sess1.run(a)  # generates 'A1'
-  print sess1.run(a)  # generates 'A2'
-  print sess1.run(b)  # generates 'B1'
-  print sess1.run(b)  # generates 'B2'
+  print(sess1.run(a))  # generates 'A1'
+  print(sess1.run(a))  # generates 'A2'
+  print(sess1.run(b))  # generates 'B1'
+  print(sess1.run(b))  # generates 'B2'
 
-print "Session 2"
+print("Session 2")
 with tf.Session() as sess2:
-  print sess2.run(a)  # generates 'A1'
-  print sess2.run(a)  # generates 'A2'
-  print sess2.run(b)  # generates 'B1'
-  print sess2.run(b)  # generates 'B2'
+  print(sess2.run(a))  # generates 'A1'
+  print(sess2.run(a))  # generates 'A2'
+  print(sess2.run(b))  # generates 'B1'
+  print(sess2.run(b))  # generates 'B2'
 ```
 
 ##### Args:

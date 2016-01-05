@@ -25,6 +25,7 @@ limitations under the License.
 #include "tensorflow/core/kernels/ops_util.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/gtl/array_slice.h"
+#include "tensorflow/core/lib/strings/numbers.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/public/tensor.h"
 #include "tensorflow/core/public/tensor_shape.h"
@@ -34,6 +35,7 @@ limitations under the License.
 #if GOOGLE_CUDA
 #include "tensorflow/stream_executor/stream.h"
 #include "tensorflow/core/common_runtime/gpu_device_context.h"
+#include "tensorflow/core/kernels/conv_ops_gpu.h"
 #endif  // GOOGLE_CUDA
 
 namespace tensorflow {
@@ -206,16 +208,22 @@ REGISTER_KERNEL_BUILDER(Name("Conv2D")
 
 #if GOOGLE_CUDA
 
-namespace {
-template <typename T>
-perftools::gputools::DeviceMemory<T> AsDeviceMemory(const T* cuda_memory,
-                                                    uint64 size) {
-  perftools::gputools::DeviceMemoryBase wrapped(const_cast<T*>(cuda_memory),
-                                                size * sizeof(T));
-  perftools::gputools::DeviceMemory<T> typed(wrapped);
-  return typed;
+int64 GetCudnnWorkspaceLimit(const string& envvar_in_mb,
+                             int64 default_value_in_bytes) {
+  const char* workspace_limit_in_mb_str = getenv(envvar_in_mb.c_str());
+  if (workspace_limit_in_mb_str != nullptr &&
+      strcmp(workspace_limit_in_mb_str, "") != 0) {
+    int64 scratch_limit_in_mb = -1;
+    if (strings::safe_strto64(workspace_limit_in_mb_str,
+                              &scratch_limit_in_mb)) {
+      return scratch_limit_in_mb * (1 << 20);
+    } else {
+      LOG(WARNING) << "Invalid value for env-var " << envvar_in_mb << ": "
+                   << workspace_limit_in_mb_str;
+    }
+  }
+  return default_value_in_bytes;
 }
-}  // namespace
 
 template <typename T>
 struct LaunchConvOp<GPUDevice, T> {
@@ -253,6 +261,8 @@ struct LaunchConvOp<GPUDevice, T> {
         }
         return;
       }
+      int padding_rows = 0;
+      int padding_cols = 0;
       if (padding == Eigen::PADDING_SAME) {
         const int64 out_rows = output->dim_size(1);
         const int64 out_cols = output->dim_size(2);
@@ -268,37 +278,56 @@ struct LaunchConvOp<GPUDevice, T> {
         // We pad Pr/2 on the left and Pr - Pr/2 on the right, Pc/2 on the top
         // and Pc - Pc/2 on the bottom.  When Pr or Pc is odd, this means
         // we pad more on the right and bottom than on the top and left.
-        const int padding_rows = (out_rows - 1) * stride + patch_rows - in_rows;
-        const int padding_cols = (out_cols - 1) * stride + patch_cols - in_cols;
-        Tensor transformed_input;
-        OP_REQUIRES_OK(
-            ctx, ctx->allocate_temp(
-                     DataTypeToEnum<T>::value,
-                     TensorShape(
-                         {input.dim_size(0), input.dim_size(1) + padding_rows,
-                          input.dim_size(2) + padding_cols, input.dim_size(3)}),
-                     &transformed_input));
+        padding_rows = (out_rows - 1) * stride + patch_rows - in_rows;
+        padding_cols = (out_cols - 1) * stride + patch_cols - in_cols;
+        const bool rows_odd = (padding_rows % 2 != 0);
+        const bool cols_odd = (padding_cols % 2 != 0);
+        if (rows_odd || cols_odd) {
+          Tensor transformed_input;
+          OP_REQUIRES_OK(
+              ctx, ctx->allocate_temp(
+                       DataTypeToEnum<T>::value,
+                       TensorShape(
+                           {input.dim_size(0), input.dim_size(1) + rows_odd,
+                            input.dim_size(2) + cols_odd, input.dim_size(3)}),
+                       &transformed_input));
 
-        functor::PadInput<GPUDevice, T, int>()(
-            ctx->eigen_device<GPUDevice>(), To32Bit(input_param.tensor<T, 4>()),
-            padding_rows / 2, padding_rows - padding_rows / 2, padding_cols / 2,
-            padding_cols - padding_cols / 2,
-            To32Bit(transformed_input.tensor<T, 4>()));
+          functor::PadInput<GPUDevice, T, int>()(
+              ctx->eigen_device<GPUDevice>(),
+              To32Bit(input_param.tensor<T, 4>()), 0, rows_odd, 0, cols_odd,
+              To32Bit(transformed_input.tensor<T, 4>()));
+          input = transformed_input;
+        }
+      }
+
+      {
+        // Convert the input tensor from NHWC to NCHW.
+        Tensor transformed_input;
+        OP_REQUIRES_OK(ctx,
+                       ctx->allocate_temp(
+                           DataTypeToEnum<T>::value,
+                           TensorShape({input.dim_size(0), input.dim_size(3),
+                                        input.dim_size(1), input.dim_size(2)}),
+                           &transformed_input));
+        functor::NHWCToNCHW<GPUDevice, T>()(
+            ctx->eigen_device<GPUDevice>(),
+            const_cast<const Tensor&>(input).tensor<T, 4>(),
+            transformed_input.tensor<T, 4>());
         input = transformed_input;
       }
 
       perftools::gputools::dnn::BatchDescriptor input_desc;
       input_desc.set_count(input.dim_size(0))
-          .set_height(input.dim_size(1))
-          .set_width(input.dim_size(2))
-          .set_feature_map_count(input.dim_size(3))
-          .set_layout(perftools::gputools::dnn::DataLayout::kBatchYXDepth);
+          .set_feature_map_count(input.dim_size(1))
+          .set_height(input.dim_size(2))
+          .set_width(input.dim_size(3))
+          .set_layout(perftools::gputools::dnn::DataLayout::kBatchDepthYX);
       perftools::gputools::dnn::BatchDescriptor output_desc;
       output_desc.set_count(output->dim_size(0))
           .set_height(output->dim_size(1))
           .set_width(output->dim_size(2))
           .set_feature_map_count(output->dim_size(3))
-          .set_layout(perftools::gputools::dnn::DataLayout::kBatchYXDepth);
+          .set_layout(perftools::gputools::dnn::DataLayout::kBatchDepthYX);
       perftools::gputools::dnn::FilterDescriptor filter_desc;
       filter_desc.set_input_filter_height(filter.dim_size(0))
           .set_input_filter_width(filter.dim_size(1))
@@ -306,7 +335,9 @@ struct LaunchConvOp<GPUDevice, T> {
           .set_output_feature_map_count(filter.dim_size(3));
       perftools::gputools::dnn::ConvolutionDescriptor conv_desc;
       conv_desc.set_vertical_filter_stride(stride)
-          .set_horizontal_filter_stride(stride);
+          .set_horizontal_filter_stride(stride)
+          .set_zero_padding_height(padding_rows / 2)
+          .set_zero_padding_width(padding_cols / 2);
 
       Tensor transformed_filter;
       OP_REQUIRES_OK(ctx,
@@ -320,17 +351,31 @@ struct LaunchConvOp<GPUDevice, T> {
           ctx->eigen_device<GPUDevice>(), To32Bit(filter.tensor<T, 4>()),
           To32Bit(transformed_filter.tensor<T, 4>()));
 
+      Tensor transformed_output;
+      OP_REQUIRES_OK(
+          ctx, ctx->allocate_temp(
+                   DataTypeToEnum<T>::value,
+                   TensorShape({output->dim_size(0), output->dim_size(3),
+                                output->dim_size(1), output->dim_size(2)}),
+                   &transformed_output));
+
       auto input_ptr = AsDeviceMemory(input.template flat<T>().data(),
                                       input.template flat<T>().size());
       auto filter_ptr =
           AsDeviceMemory(transformed_filter.template flat<T>().data(),
                          transformed_filter.template flat<T>().size());
-      auto output_ptr = AsDeviceMemory(output->template flat<T>().data(),
-                                       output->template flat<T>().size());
+      auto output_ptr =
+          AsDeviceMemory(transformed_output.template flat<T>().data(),
+                         transformed_output.template flat<T>().size());
 
+      static int64 ConvolveScratchSize = GetCudnnWorkspaceLimit(
+          "TF_CUDNN_WORKSPACE_LIMIT_IN_MB", 1LL << 32  // 4GB by default
+          );
+      CudnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
       bool cudnn_launch_status =
-          stream->ThenConvolve(input_desc, input_ptr, filter_desc, filter_ptr,
-                               conv_desc, output_desc, &output_ptr)
+          stream->ThenConvolveWithScratch(input_desc, input_ptr, filter_desc,
+                                          filter_ptr, conv_desc, output_desc,
+                                          &output_ptr, &scratch_allocator)
               .ok();
 
       if (!cudnn_launch_status) {
@@ -338,6 +383,12 @@ struct LaunchConvOp<GPUDevice, T> {
             "cuDNN launch failure : input shape(", input.shape().DebugString(),
             ") filter shape(", filter.shape().DebugString(), ")"));
       }
+
+      // Convert the output tensor back from NHWC to NCHW.
+      functor::NCHWToNHWC<GPUDevice, T>()(
+          ctx->eigen_device<GPUDevice>(),
+          const_cast<const Tensor&>(transformed_output).tensor<T, 4>(),
+          output->tensor<T, 4>());
     } else {
       LaunchGeneric<GPUDevice, T>::launch(ctx, input_param, filter, stride,
                                           padding, output);

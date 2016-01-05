@@ -107,7 +107,7 @@ def _Identity(data, name=None):
 
 
 def _Enter(data, frame_name, is_constant=False, parallel_iterations=10,
-           name=None):
+           use_ref=True, name=None):
   """Creates or finds a child frame, and makes 'data' available to it.
 
   The unique `frame_name` is used by the `Executor` to identify frames. If
@@ -120,17 +120,18 @@ def _Enter(data, frame_name, is_constant=False, parallel_iterations=10,
     frame_name: The name of the child frame.
     is_constant: If true, the output is constant within the child frame.
     parallel_iterations: The number of iterations allowed to run in parallel.
+    use_ref: If true, use ref_enter if data is of ref type.
     name: A name for this operation (optional).
 
   Returns:
     The same tensor as 'data'.
   """
-  if not data.dtype.is_ref_dtype:
-    return enter(data, frame_name, is_constant, parallel_iterations,
-                 name=name)
-  else:
+  if data.dtype.is_ref_dtype and use_ref:
     return ref_enter(data, frame_name, is_constant, parallel_iterations,
                      name=name)
+  else:
+    return enter(data, frame_name, is_constant, parallel_iterations,
+                 name=name)
 
 
 def exit(data, name=None):
@@ -148,7 +149,7 @@ def exit(data, name=None):
   return gen_control_flow_ops._exit(data, name)
 
 
-def switch(data, pred, name=None):
+def switch(data, pred, dtype=None, name=None):
   """Forwards `data` to an output determined by `pred`.
 
   If `pred` is true, the `data` input is forwared to the first output.
@@ -159,6 +160,8 @@ def switch(data, pred, name=None):
   Args:
     data: The tensor to be forwarded to the appropriate output.
     pred: A scalar that specifies which output port will receive data.
+    dtype: Optional element type for the returned tensor. If missing,
+           the type is inferred from the type of `value`.
     name: A name for this operation (optional).
 
   Returns:
@@ -166,7 +169,8 @@ def switch(data, pred, name=None):
     `output_true`, otherwise it goes to `output_false`.
   """
   with ops.op_scope([data, pred], name, "Switch") as name:
-    data = ops.convert_to_tensor_or_indexed_slices(data, name="data")
+    data = ops.convert_to_tensor_or_indexed_slices(data, dtype=dtype,
+                                                   name="data")
     pred = ops.convert_to_tensor(pred, name="pred")
     if isinstance(data, ops.Tensor):
       return gen_control_flow_ops._switch(data, pred, name=name)
@@ -571,18 +575,20 @@ class CondContext(ControlFlowContext):
       if not isinstance(r, list) and not isinstance(r, _basetuple):
         r = [r]
       for v in r:
+        real_v = v
         if isinstance(v, ops.Operation):
-          v = with_dependencies([v], self._pivot)
+          real_v = with_dependencies([v], self._pivot)
         elif v.name not in self._values:
           self._values.add(v.name)
           if self._outer_context is not None:
-            v = self._outer_context.AddValue(v)
-          v = _SwitchRefOrTensor(v, self._pred)[self._branch]
+            real_v = self._outer_context.AddValue(v)
+          real_v = _SwitchRefOrTensor(real_v, self._pred)[self._branch]
+          self._external_values[v.name] = real_v
         else:
           external_v = self._external_values.get(v.name)
           if external_v is not None:
-            v = external_v
-        result.append(v)
+            real_v = external_v
+        result.append(real_v)
     return result
 
 
@@ -754,9 +760,19 @@ class WhileContext(ControlFlowContext):
       self._values.add(val.name)
       if self._outer_context is not None:
         result = self._outer_context.AddValue(val)
+
       # Create an Enter that makes 'result' known to this context.
-      enter = _Enter(result, self._name, is_constant=True,
-                     parallel_iterations=self._parallel_iterations)
+      with ops.control_dependencies(None):
+        enter = _Enter(result, self._name, is_constant=True,
+                       parallel_iterations=self._parallel_iterations)
+
+      # Set manually since 'enter' is created without a control flow context.
+      # pylint: disable=protected-access
+      enter.op._set_control_flow_context(self)
+      # pylint: enable=protected-access
+      self.AddOp(enter.op)
+
+      # Add 'enter' in this context.
       self._values.add(enter.name)
       self._external_values[val.name] = enter
       result = enter
@@ -907,7 +923,7 @@ class WhileContext(ControlFlowContext):
                        name="f_cond")
     merge_acc = merge([enter_acc, enter_acc])[0]
     switch_acc = switch(merge_acc, self._pivot)
-    acc = array_ops.concat(0, [switch_add_acc[1], value])
+    acc = array_ops.concat(0, [switch_acc[1], value])
     next_acc = next_iteration(acc)
     merge_acc.op._update_input(1, next_acc)
 
@@ -998,13 +1014,16 @@ class WhileContext(ControlFlowContext):
     # Let the context know the loop variabes so the _Enter nodes below
     # would be added into the context correctly.
     self._values = set([x.name for x in loop_vars])
+    real_vars = loop_vars
     if self._outer_context is not None:
       real_vars = [self._outer_context.AddValue(x) for x in loop_vars]
-    else:
-      real_vars = loop_vars
-    enter_vars = [_Enter(x, self._name, is_constant=False,
-                         parallel_iterations=self._parallel_iterations)
-                  for x in real_vars]
+    with ops.control_dependencies(None):
+      enter_vars = [_Enter(x, self._name, is_constant=False,
+                           parallel_iterations=self._parallel_iterations,
+                           use_ref=False)
+                    for x in real_vars]
+    for x in enter_vars:
+      x.op._set_control_flow_context(self)  # pylint: disable=protected-access
     self._values = set([x.name for x in enter_vars])
 
     merge_vars = [merge([x, x])[0] for x in enter_vars]
@@ -1252,12 +1271,19 @@ def tuple(tensors, name=None, control_inputs=None):
 
   Raises:
     ValueError: If `tensors` does not contain any `Tensor` or `IndexedSlices`.
+    TypeError: If `control_inputs` is not a list of `Operation` or `Tensor`
+      objects.
 
   """
   with ops.op_scope(tensors, name, "tuple") as name:
     gating_ops = [t.op for t in tensors if t]
     if control_inputs:
-      gating_ops += control_inputs
+      for c in control_inputs:
+        if isinstance(c, ops.Tensor):
+          c = c.op
+        elif not isinstance(c, ops.Operation):
+          raise TypeError("Control input must be Operation or Tensor: %s" % c)
+        gating_ops.append(c)
     # Note that in order to ensure ordering in the pbtxt, we must take care to
     # ensure the order here.
     gating_ops = sorted(set(gating_ops), key=lambda op: op._id)  # Uniquify ops.

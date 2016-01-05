@@ -165,9 +165,21 @@ of `control_inputs` from all active contexts.
 
 ```python
 with g.control_dependencies([a, b]):
-  # Ops declared here run after `a` and `b`.
+  # Ops constructed here run after `a` and `b`.
   with g.control_dependencies([c, d]):
-    # Ops declared here run after `a`, `b`, `c`, and `d`.
+    # Ops constructed here run after `a`, `b`, `c`, and `d`.
+```
+
+You can pass None to clear the control dependencies:
+
+```python
+with g.control_dependencies([a, b]):
+  # Ops constructed here run after `a` and `b`.
+  with g.control_dependencies(None):
+    # Ops constructed here run normally, not waiting for either `a` or `b`.
+    with g.control_dependencies([c, d]):
+      # Ops constructed here run after `c` and `d`, also not waiting
+      # for either `a` or `b`.
 ```
 
 *N.B.* The control dependencies context applies *only* to ops that
@@ -195,9 +207,10 @@ def my_func(pred, tensor):
 ##### Args:
 
 
-*  <b>`control_inputs`</b>: A list of `Operation` or `Tensor` objects, which
+*  <b>`control_inputs`</b>: A list of `Operation` or `Tensor` objects which
     must be executed or computed before running the operations
-    defined in the context.
+    defined in the context.  Can also be `None` to clear the control
+    dependencies.
 
 ##### Returns:
 
@@ -546,6 +559,19 @@ TensorBoard.
 
 Returns a version number that increases as ops are added to the graph.
 
+Note that this is unrelated to the
+[GraphDef version](#Graph.graph_def_version).
+
+
+- - -
+
+#### `tf.Graph.graph_def_version` {#Graph.graph_def_version}
+
+The GraphDef version of this graph.
+
+For details on the meaning of each version, see [`GraphDef`]
+(https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/core/framework/graph.proto).
+
 
 
 - - -
@@ -573,8 +599,10 @@ the default graph.
     reference-typed inputs must specify `input_types` explicitly.
 *  <b>`name`</b>: (Optional.) A string name for the operation. If not specified, a
     name is generated based on `op_type`.
-*  <b>`attrs`</b>: (Optional.) A list of `AttrValue` protos for the `attr` field of
-    the `NodeDef` proto that will represent the operation.
+*  <b>`attrs`</b>: (Optional.) A dictionary where the key is the attribute name (a
+    string) and the value is the respective `attr` attribute of the
+    `NodeDef` proto that will represent the operation (an `AttrValue`
+    proto).
 *  <b>`op_def`</b>: (Optional.) The `OpDef` proto that describes the `op_type` that
     the operation will have.
 *  <b>`compute_shapes`</b>: (Optional.) If True, shape inference will be performed
@@ -991,12 +1019,12 @@ example:
 ```python
 c = tf.constant([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
 
-print c.get_shape()
+print(c.get_shape())
 ==> TensorShape([Dimension(2), Dimension(3)])
 
 d = tf.constant([[1.0, 0.0], [0.0, 1.0], [1.0, 0.0], [0.0, 1.0]])
 
-print d.get_shape()
+print(d.get_shape())
 ==> TensorShape([Dimension(4), Dimension(2)])
 
 # Raises a ValueError, because `c` and `d` do not have compatible
@@ -1005,7 +1033,7 @@ e = tf.matmul(c, d)
 
 f = tf.matmul(c, d, transpose_a=True, transpose_b=True)
 
-print f.get_shape()
+print(f.get_shape())
 ==> TensorShape([Dimension(3), Dimension(4)])
 ```
 
@@ -1037,12 +1065,12 @@ image = tf.image.decode_png(image_data, channels=3)
 
 # The height and width dimensions of `image` are data dependent, and
 # cannot be computed without executing the op.
-print image.get_shape()
+print(image.get_shape())
 ==> TensorShape([Dimension(None), Dimension(None), Dimension(3)])
 
 # We know that each image in this dataset is 28 x 28 pixels.
 image.set_shape([28, 28, 3])
-print image.get_shape()
+print(image.get_shape())
 ==> TensorShape([Dimension(28), Dimension(28), Dimension(3)])
 ```
 
@@ -1115,6 +1143,8 @@ The following `DType` objects are defined:
 
 * `tf.qint8`: Quantized 8-bit signed integer.
 * `tf.quint8`: Quantized 8-bit unsigned integer.
+* `tf.qint16`: Quantized 16-bit signed integer.
+* `tf.quint16`: Quantized 16-bit unsigned integer.
 * `tf.qint32`: Quantized 32-bit signed integer.
 
 In addition, variants of these types with the `_ref` suffix are
@@ -1179,6 +1209,13 @@ Returns a reference `DType` based on this `DType`.
 
 - - -
 
+#### `tf.DType.is_floating` {#DType.is_floating}
+
+Returns whether this is a (real) floating point type.
+
+
+- - -
+
 #### `tf.DType.is_integer` {#DType.is_integer}
 
 Returns whether this is a (non-quantized) integer type.
@@ -1189,6 +1226,20 @@ Returns whether this is a (non-quantized) integer type.
 #### `tf.DType.is_quantized` {#DType.is_quantized}
 
 Returns whether this is a quantized data type.
+
+
+- - -
+
+#### `tf.DType.is_unsigned` {#DType.is_unsigned}
+
+Returns whether this type is unsigned.
+
+Non-numeric, unordered, and quantized types are not considered unsigned, and
+this function returns `False`.
+
+##### Returns:
+
+  Whether a `DType` is unsigned.
 
 
 
@@ -1227,13 +1278,6 @@ construct a `DataType` object directly. Instead, use the
 
 
 *  <b>`TypeError`</b>: If `type_enum` is not a value `types_pb2.DataType`.
-
-
-- - -
-
-#### `tf.DType.is_floating` {#DType.is_floating}
-
-Returns whether this is a (real) floating point type.
 
 
 - - -
@@ -1343,9 +1387,10 @@ for more details.
 ##### Args:
 
 
-*  <b>`control_inputs`</b>: A list of `Operation` or `Tensor` objects, which
+*  <b>`control_inputs`</b>: A list of `Operation` or `Tensor` objects which
     must be executed or computed before running the operations
-    defined in the context.
+    defined in the context.  Can also be `None` to clear the control
+    dependencies.
 
 ##### Returns:
 
@@ -1365,7 +1410,7 @@ and Python scalars. For example:
 
 ```python
 import numpy as np
-array = np.random.rand((32, 100, 100))
+array = np.random.rand(32, 100, 100)
 
 def my_func(arg):
   arg = tf.convert_to_tensor(arg, dtype=tf.float32)
@@ -1401,6 +1446,36 @@ and scalars in addition to `Tensor` objects.
 
 *  <b>`TypeError`</b>: If no conversion function is registered for `value`.
 *  <b>`RuntimeError`</b>: If a registered conversion function returns an invalid value.
+
+
+- - -
+
+### `tf.convert_to_tensor_or_indexed_slices(value, dtype=None, name=None, as_ref=False)` {#convert_to_tensor_or_indexed_slices}
+
+Converts the given object to a `Tensor` or an `IndexedSlices`.
+
+If `value` is an `IndexedSlices` it is returned
+unmodified. Otherwise, it is converted to a `Tensor` using
+`convert_to_tensor()`.
+
+##### Args:
+
+
+*  <b>`value`</b>: An `IndexedSlices` or an object that can be consumed by
+    `convert_to_tensor()`.
+*  <b>`dtype`</b>: (Optional.) The required `DType` of the returned `Tensor` or
+    `IndexedSlices`.
+*  <b>`name`</b>: (Optional.) A name to use if a new `Tensor` is created.
+*  <b>`as_ref`</b>: True if the caller wants the results as ref tensors.
+
+##### Returns:
+
+  An `Tensor` or an `IndexedSlices` based on `value`.
+
+##### Raises:
+
+
+*  <b>`ValueError`</b>: If `dtype` does not match the element type of `value`.
 
 
 - - -
@@ -1545,6 +1620,10 @@ The following standard keys are defined:
   produce input for a computation. See
   [`tf.start_queue_runners()`](../../api_docs/python/train.md#start_queue_runners)
   for more details.
+* `MOVING_AVERAGE_VARIABLES`: the subset of `Variable` objects that will also
+  keep moving averages.  See
+  [`tf.moving_average_variables()`](../../api_docs/python/state_ops.md#moving_average_variables)
+  for more details.
 
 
 ## Defining new operations
@@ -1556,7 +1635,7 @@ The following standard keys are defined:
 A decorator for registering the gradient function for an op type.
 
 This decorator is only used when defining a new op type. For an op
-with `m` inputs and `n` inputs, the gradient function is a function
+with `m` inputs and `n` outputs, the gradient function is a function
 that takes the original `Operation` and `n` `Tensor` objects
 (representing the gradients with respect to each output of the op),
 and returns `m` `Tensor` objects (representing the partial gradients
@@ -1569,7 +1648,7 @@ following gradient function would be registered:
 ```python
 @tf.RegisterGradient("Sub")
 def _sub_grad(unused_op, grad):
-  return grad, tf.Neg(grad)
+  return grad, tf.neg(grad)
 ```
 
 The decorator argument `op_type` is the string type of an
@@ -2050,7 +2129,7 @@ The value of this dimension, or None if it is unknown.
 
 - - -
 
-### `tf.op_scope(values, name, default_name)` {#op_scope}
+### `tf.op_scope(values, name, default_name=None)` {#op_scope}
 
 Returns a context manager for use when defining a Python op.
 
@@ -2079,7 +2158,12 @@ def my_op(a, b, c, name=None):
 
 ##### Returns:
 
-  A context manager for use in defining a Python op.
+  A context manager for use in defining Python ops. Yields the name scope.
+
+##### Raises:
+
+
+*  <b>`ValueError`</b>: if neither `name` nor `default_name` is provided.
 
 
 - - -

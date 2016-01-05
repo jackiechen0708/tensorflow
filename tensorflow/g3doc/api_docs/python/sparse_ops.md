@@ -157,13 +157,13 @@ Alias for field number 1
 
 - - -
 
-### `tf.sparse_to_dense(sparse_indices, output_shape, sparse_values, default_value, name=None)` {#sparse_to_dense}
+### `tf.sparse_to_dense(sparse_indices, output_shape, sparse_values, default_value=0, name=None)` {#sparse_to_dense}
 
 Converts a sparse representation into a dense tensor.
 
 Builds an array `dense` with shape `output_shape` such that
 
-```prettyprint
+```python
 # If sparse_indices is scalar
 dense[i] = (i == sparse_indices ? sparse_values : default_value)
 
@@ -174,34 +174,32 @@ dense[sparse_indices[i]] = sparse_values[i]
 dense[sparse_indices[i][0], ..., sparse_indices[i][d-1]] = sparse_values[i]
 ```
 
-All other values in `dense` are set to `default_value`.  If `sparse_values` is a
-scalar, all sparse indices are set to this single value.
+All other values in `dense` are set to `default_value`.  If `sparse_values`
+is a scalar, all sparse indices are set to this single value.
 
 ##### Args:
 
 
-*  <b>`sparse_indices`</b>: A `Tensor`. Must be one of the following types: `int32`, `int64`.
-    0-D, 1-D, or 2-D.  `sparse_indices[i]` contains the complete
-    index where `sparse_values[i]` will be placed.
-*  <b>`output_shape`</b>: A `Tensor`. Must have the same type as `sparse_indices`.
-    1-D.  Shape of the dense output tensor.
-*  <b>`sparse_values`</b>: A `Tensor`.
-    1-D.  Values corresponding to each row of `sparse_indices`,
-    or a scalar value to be used for all sparse indices.
-*  <b>`default_value`</b>: A `Tensor`. Must have the same type as `sparse_values`.
-    Scalar value to set for indices not specified in
-    `sparse_indices`.
+*  <b>`sparse_indices`</b>: A 0-D, 1-D, or 2-D `Tensor` of type `int32` or `int64`.
+    `sparse_indices[i]` contains the complete index where `sparse_values[i]`
+    will be placed.
+*  <b>`output_shape`</b>: A 1-D `Tensor` of the same type as `sparse_indices`.  Shape
+    of the dense output tensor.
+*  <b>`sparse_values`</b>: A 0-D or 1-D `Tensor`.  Values corresponding to each row of
+    `sparse_indices`, or a scalar value to be used for all sparse indices.
+*  <b>`default_value`</b>: A 0-D `Tensor` of the same type as `sparse_values`.  Value
+    to set for indices not specified in `sparse_indices`.  Defaults to zero.
 *  <b>`name`</b>: A name for the operation (optional).
 
 ##### Returns:
 
-  A `Tensor`. Has the same type as `sparse_values`.
-  Dense output tensor of shape `output_shape`.
+  Dense `Tensor` of shape `output_shape`.  Has the same type as
+  `sparse_values`.
 
 
 - - -
 
-### `tf.sparse_tensor_to_dense(sp_input, default_value, name=None)` {#sparse_tensor_to_dense}
+### `tf.sparse_tensor_to_dense(sp_input, default_value=0, name=None)` {#sparse_tensor_to_dense}
 
 Converts a `SparseTensor` into a dense tensor.
 
@@ -225,7 +223,7 @@ string tensor with values:
 
 *  <b>`sp_input`</b>: The input `SparseTensor`.
 *  <b>`default_value`</b>: Scalar value to set for indices not specified in
-    `sp_input`.
+    `sp_input`.  Defaults to zero.
 *  <b>`name`</b>: A name prefix for the returned tensors (optional).
 
 ##### Returns:
@@ -396,6 +394,49 @@ then the output will be a `SparseTensor` of shape `[4, 5]` and
 
   A `SparseTensor` with the same shape and non-empty values, but in
   canonical ordering.
+
+##### Raises:
+
+
+*  <b>`TypeError`</b>: If `sp_input` is not a `SparseTensor`.
+
+
+- - -
+
+### `tf.sparse_split(split_dim, num_split, sp_input, name=None)` {#sparse_split}
+
+Split a `SparseTensor` into `num_split` tensors along `split_dim`.
+
+If the `sp_input.shape[split_dim]` is not an integer multiple of `num_split`
+each slice starting from 0:`shape[split_dim] % num_split` gets extra one
+dimension. For example, if `split_dim = 1` and `num_split = 2` and the
+input is:
+
+    input_tensor = shape = [2, 7]
+    [    a   d e  ]
+    [b c          ]
+
+Graphically the output tensors are:
+
+    output_tensor[0] =
+    [    a ]
+    [b c   ]
+
+    output_tensor[1] =
+    [ d e  ]
+    [      ]
+
+##### Args:
+
+
+*  <b>`split_dim`</b>: A 0-D `int32` `Tensor`. The dimension along which to split.
+*  <b>`num_split`</b>: A Python integer. The number of ways to split.
+*  <b>`sp_input`</b>: The `SparseTensor` to split.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  `num_split` `SparseTensor` objects resulting from splitting `value`.
 
 ##### Raises:
 

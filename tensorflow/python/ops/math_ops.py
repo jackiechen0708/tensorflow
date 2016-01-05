@@ -70,6 +70,9 @@ mathematical functions for matrices to your graph.
 @@cholesky
 @@batch_cholesky
 
+@@self_adjoint_eig
+@@batch_self_adjoint_eig
+
 ## Complex Number Functions
 
 TensorFlow provides several operations that you can use to add complex number
@@ -80,6 +83,8 @@ functions to your graph.
 @@conj
 @@imag
 @@real
+@@fft2d
+@@ifft2d
 
 ## Reduction
 
@@ -627,7 +632,7 @@ def reduce_sum(input_tensor, reduction_indices=None, keep_dims=False,
   For example:
 
   ```python
-  # 'x' is [[1, 1, 1]]
+  # 'x' is [[1, 1, 1]
   #         [1, 1, 1]]
   tf.reduce_sum(x) ==> 6
   tf.reduce_sum(x, 0) ==> [2, 2, 2]
@@ -666,7 +671,7 @@ def reduce_mean(input_tensor, reduction_indices=None, keep_dims=False,
   For example:
 
   ```python
-  # 'x' is [[1., 1. ]]
+  # 'x' is [[1., 1.]
   #         [2., 2.]]
   tf.reduce_mean(x) ==> 1.5
   tf.reduce_mean(x, 0) ==> [1.5, 1.5]
@@ -784,7 +789,7 @@ def reduce_all(input_tensor, reduction_indices=None, keep_dims=False,
   For example:
 
   ```python
-  # 'x' is [[True,  True]]
+  # 'x' is [[True,  True]
   #         [False, False]]
   tf.reduce_all(x) ==> False
   tf.reduce_all(x, 0) ==> [False, False]
@@ -821,7 +826,7 @@ def reduce_any(input_tensor, reduction_indices=None, keep_dims=False,
   For example:
 
   ```python
-  # 'x' is [[True,  True]]
+  # 'x' is [[True,  True]
   #         [False, False]]
   tf.reduce_any(x) ==> True
   tf.reduce_any(x, 0) ==> [True, True]
@@ -1116,6 +1121,8 @@ ops.RegisterShape("Sigmoid")(common_shapes.unchanged_shape)
 ops.RegisterShape("Tanh")(common_shapes.unchanged_shape)
 ops.RegisterShape("Cast")(common_shapes.unchanged_shape)
 ops.RegisterShape("ComplexAbs")(common_shapes.unchanged_shape)
+ops.RegisterShape("FFT2D")(common_shapes.unchanged_shape)
+ops.RegisterShape("IFFT2D")(common_shapes.unchanged_shape)
 
 
 @ops.RegisterShape("Add")

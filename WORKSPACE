@@ -16,7 +16,14 @@ new_http_archive(
   name = "gmock_archive",
   url = "https://googlemock.googlecode.com/files/gmock-1.7.0.zip",
   sha256 = "26fcbb5925b74ad5fc8c26b0495dfc96353f4d553492eb97e85a8a6d2f43095b",
-  build_file = "gmock.BUILD",
+  build_file = "google/protobuf/gmock.BUILD",
+)
+
+new_http_archive(
+  name = "eigen_archive",
+  url = "https://bitbucket.org/eigen/eigen/get/3.3-beta1.tar.gz",
+  sha256 = "2d6533e86ed6b54d30ae1d6c10808533b335d1c570c5e4c58ce2f03da99c134b",
+  build_file = "eigen.BUILD",
 )
 
 bind(
@@ -32,7 +39,7 @@ bind(
 git_repository(
   name = "re2",
   remote = "https://github.com/google/re2.git",
-  tag = "2015-07-01",
+  commit = "791beff",
 )
 
 new_http_archive(

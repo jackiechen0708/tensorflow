@@ -217,7 +217,7 @@ def max_pool(value, ksize, strides, padding, name=None):
 
   Args:
     value: A 4-D `Tensor` with shape `[batch, height, width, channels]` and
-      type `float32`, `float64`, `qint8`, `quint8`, `qint32`.
+      type `tf.float32`.
     ksize: A list of ints that has length >= 4.  The size of the window for
       each dimension of the input tensor.
     strides: A list of ints that has length >= 4.  The stride of the sliding
@@ -226,7 +226,7 @@ def max_pool(value, ksize, strides, padding, name=None):
     name: Optional name for the operation.
 
   Returns:
-    A `Tensor` with the same type as `value`.  The max pooled output tensor.
+    A `Tensor` with type `tf.float32`.  The max pooled output tensor.
   """
   with ops.op_scope([value], name, "MaxPool") as name:
     value = ops.convert_to_tensor(value, name="input")
@@ -237,12 +237,14 @@ def max_pool(value, ksize, strides, padding, name=None):
 
 ops.RegisterShape("Relu")(common_shapes.unchanged_shape)
 ops.RegisterShape("Relu6")(common_shapes.unchanged_shape)
+ops.RegisterShape("Elu")(common_shapes.unchanged_shape)
 ops.RegisterShape("Softplus")(common_shapes.unchanged_shape)
 ops.RegisterShape("Softsign")(common_shapes.unchanged_shape)
 
 
 @ops.RegisterShape("ReluGrad")
 @ops.RegisterShape("Relu6Grad")
+@ops.RegisterShape("EluGrad")
 @ops.RegisterShape("SoftplusGrad")
 @ops.RegisterShape("SoftsignGrad")
 def _BinaryElementwiseShape(op):

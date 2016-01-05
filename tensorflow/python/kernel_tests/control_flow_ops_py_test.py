@@ -83,7 +83,7 @@ class ControlFlowTest(tf.test.TestCase):
     with self.test_session():
       v = tf.Variable(7)
 
-      enter_v = control_flow_ops._Enter(v, "foo_1")
+      enter_v = control_flow_ops._Enter(v, "foo_1", is_constant=True)
       nine = tf.constant(9)
       enter_nine = control_flow_ops.enter(nine, "foo_1")
       op = tf.assign(enter_v, enter_nine)
@@ -269,21 +269,6 @@ class ControlFlowTest(tf.test.TestCase):
       enter_false = control_flow_ops.enter(false, "foo_1", False)
       enter_n = control_flow_ops.enter(n, "foo_1", False)
 
-      merge_n = control_flow_ops.merge([enter_n], name="merge_n")[0]
-      switch_n = control_flow_ops.switch(merge_n, enter_false)
-      exit_n = control_flow_ops.exit(switch_n[0])
-
-      result = exit_n.eval()
-    self.assertAllEqual(10, result)
-
-  def testLoop_false_1(self):
-    with self.test_session():
-      false = tf.convert_to_tensor(False)
-      n = tf.constant(10)
-
-      enter_false = control_flow_ops.enter(false, "foo_1", False)
-      enter_n = control_flow_ops.enter(n, "foo_1", False)
-
       merge_n = control_flow_ops.merge([enter_n, enter_n], name="merge_n")[0]
       switch_n = control_flow_ops.switch(merge_n, enter_false)
       exit_n = control_flow_ops.exit(switch_n[0])
@@ -295,32 +280,54 @@ class ControlFlowTest(tf.test.TestCase):
 
   def testLoop_1(self):
     with self.test_session():
-      zero = tf.convert_to_tensor(0)
-      one = tf.convert_to_tensor(1)
+      zero = tf.constant(0)
+      one = tf.constant(1)
       n = tf.constant(10)
 
-      enter_zero = control_flow_ops.enter(zero, "foo_1", False)
-      enter_one = control_flow_ops.enter(one, "foo_1", False)
-      enter_n = control_flow_ops.enter(n, "foo_1", False)
-      merge_zero = control_flow_ops.merge([enter_zero, enter_zero],
-                                          name="merge_zero")[0]
-      merge_one = control_flow_ops.merge([enter_one, enter_one],
-                                         name="merge_one")[0]
-      merge_n = control_flow_ops.merge([enter_n, enter_n], name="merge_n")[0]
-      less_op = tf.less(merge_n, merge_n)
-      cond_op = control_flow_ops.loop_cond(less_op)
-      switch_zero = control_flow_ops.switch(merge_zero, cond_op)
-      switch_one = control_flow_ops.switch(merge_one, cond_op)
-      switch_n = control_flow_ops.switch(merge_n, cond_op)
-      next_zero = control_flow_ops.next_iteration(switch_zero[1])
-      next_one = control_flow_ops.next_iteration(switch_one[1])
-      next_n = control_flow_ops.next_iteration(switch_n[1])
-      merge_zero.op._update_input(1, next_zero)
-      merge_one.op._update_input(1, next_one)
-      merge_n.op._update_input(1, next_n)
-      exit_n = control_flow_ops.exit(switch_n[0])
+      enter_i = control_flow_ops.enter(zero, "foo", False)
+      enter_one = control_flow_ops.enter(one, "foo", True)
+      enter_n = control_flow_ops.enter(n, "foo", True)
 
-      result = exit_n.eval()
+      with tf.device("/gpu:0"):
+        merge_i = control_flow_ops.merge([enter_i, enter_i])[0]
+
+      less_op = tf.less(merge_i, enter_n)
+      cond_op = control_flow_ops.loop_cond(less_op)
+      switch_i = control_flow_ops.switch(merge_i, cond_op)
+
+      add_i = tf.add(switch_i[1], enter_one)
+
+      next_i = control_flow_ops.next_iteration(add_i)
+      merge_i.op._update_input(1, next_i)
+
+      exit_i = control_flow_ops.exit(switch_i[0])
+      result = exit_i.eval()
+    self.assertAllEqual(10, result)
+
+  def testLoop_2(self):
+    with self.test_session():
+      zero = tf.constant(0)
+      one = tf.constant(1)
+      n = tf.constant(10)
+
+      enter_i = control_flow_ops.enter(zero, "foo", False)
+      enter_one = control_flow_ops.enter(one, "foo", True)
+      enter_n = control_flow_ops.enter(n, "foo", True)
+
+      merge_i = control_flow_ops.merge([enter_i, enter_i])[0]
+
+      less_op = tf.less(merge_i, enter_n)
+      cond_op = control_flow_ops.loop_cond(less_op)
+      switch_i = control_flow_ops.switch(merge_i, cond_op)
+
+      add_i = tf.add(switch_i[1], enter_one)
+
+      with tf.device("/gpu:0"):
+        next_i = control_flow_ops.next_iteration(add_i)
+      merge_i.op._update_input(1, next_i)
+
+      exit_i = control_flow_ops.exit(switch_i[0])
+      result = exit_i.eval()
     self.assertAllEqual(10, result)
 
   def testCondIndexedSlices(self):
@@ -444,6 +451,17 @@ class ControlFlowTest(tf.test.TestCase):
       tf.initialize_all_variables().run()
       result = r.eval()
       self.assertAllEqual(np.array([7]), result)
+
+  def testCond_7(self):
+    with self.test_session() as sess:
+      x = tf.constant(10)
+      y = tf.constant(200)
+      pred = tf.less(1, 2)
+      fn1 = lambda: [tf.add(x, 1), tf.add(x, 2)]
+      fn2 = lambda: [y, y]
+      r = control_flow_ops.cond(pred, fn1, fn2)
+
+      self.assertAllEqual([11, 12], sess.run(r))
 
   def testCondGrad_1(self):
     with self.test_session():
@@ -957,6 +975,35 @@ class ControlFlowTest(tf.test.TestCase):
       self.assertEqual(10, var_a.eval())
       self.assertEqual(10, var_b.eval())
 
+  # b/24814668
+  def testWhileUpdateVariable_6(self):
+    with self.test_session():
+      # Create some variables.
+      var_a = tf.Variable(0, name="a")
+      var_b = tf.Variable(0, name="b")
+      c = tf.constant(0)
+      tf.initialize_all_variables().run()
+
+      # Loop condition
+      def pred(i):
+        return tf.less(i, 10)
+
+      # Loop body
+      def loop_body(i):
+        asn1 = tf.assign_add(var_a, 1, name="a_add")
+        with tf.control_dependencies([asn1]):
+          asn2 = tf.assign_add(var_b, var_a, name="b_add")
+        with tf.control_dependencies([asn2]):
+          ni = tf.add(i, 1, name="i_add")
+          return ni
+
+      lpa = control_flow_ops.While(pred, loop_body, [c], 1, name="loop")
+
+      self.assertEqual(0, var_b.eval())
+      lpa.eval()  # Run the loop
+      self.assertEqual(55, var_b.eval())
+      self.assertEqual(10, var_a.eval())
+
   def testWhileQueue_1(self):
     with self.test_session():
       q = tf.FIFOQueue(-1, tf.int32)
@@ -1324,6 +1371,18 @@ class TupleTest(tf.test.TestCase):
           self.assertAllClose([[10.1, 11.1]], g2.eval())
           self.assertAllClose([[0.0, 1.0], [10.0, 11.0], [20.0, 21.0]],
                               v1.eval())
+
+  def testAcceptTensorsAsControlInputs(self):
+    with self.test_session():
+      var = tf.Variable(0)
+      assign = tf.assign(var, 1)
+      t, = tf.tuple([tf.constant(0)], control_inputs=[assign])
+
+      # Should trigger the assign.
+      t.eval()
+
+      self.assertEquals(1, var.eval())
+
 
 if __name__ == "__main__":
   tf.test.main()

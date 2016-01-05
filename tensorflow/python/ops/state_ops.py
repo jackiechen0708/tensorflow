@@ -24,6 +24,7 @@ collected in the graph.
 
 @@all_variables
 @@trainable_variables
+@@moving_average_variables
 
 @@initialize_all_variables
 @@initialize_variables
@@ -45,6 +46,8 @@ create variables contingent on certain conditions.
 
 @@get_variable
 @@get_variable_scope
+@@make_template
+@@variable_op_scope
 @@variable_scope
 
 @@constant_initializer

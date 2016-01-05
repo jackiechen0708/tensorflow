@@ -290,10 +290,9 @@ This operation creates a tensor of shape `dims` and fills it with `value`.
 For example:
 
 ```prettyprint
-# output tensor shape needs to be [2, 3]
-# so 'dims' is [2, 3]
-fill(dims, 9) ==> [[9, 9, 9]
-                   [9, 9, 9]]
+# Output tensor has shape [2, 3].
+fill([2, 3], 9) ==> [[9, 9, 9]
+                     [9, 9, 9]]
 ```
 
 dims: 1-D. Represents the shape of the output tensor.
@@ -326,7 +325,7 @@ If `indices` is a permutation and `len(indices) == params.shape[0]` then
 this operation will permute `params` accordingly.
 
 <div style="width:70%; margin:auto; margin-bottom:10px; margin-top:20px;">
-<img style="width:100%" src="../images/Gather.png" alt>
+<img style="width:100%" src="../../images/Gather.png" alt>
 </div>
 )doc");
 
@@ -582,6 +581,7 @@ output[3, 2:, :, ...] = input[3, 2:, :, ...]
 ```
 
 In contrast, if:
+
 ```prettyprint
 # Given this:
 batch_dim = 2
@@ -790,13 +790,12 @@ For example:
 
 ```prettyprint
 # 't' is [[1, 1], [2, 2]]
-# 'paddings' is [[1, 1]], [2, 2]]
+# 'paddings' is [[1, 1], [2, 2]]
 # rank of 't' is 2
-pad(t, paddings) ==> [[0, 0, 0, 0, 0]
-                      [0, 0, 0, 0, 0]
-                      [0, 1, 1, 0, 0]
-                     [[0, 2, 2, 0, 0]
-                      [0, 0, 0, 0, 0]]
+pad(t, paddings) ==> [[0, 0, 0, 0, 0, 0]
+                      [0, 0, 1, 1, 0, 0]
+                      [0, 0, 2, 2, 0, 0]
+                      [0, 0, 0, 0, 0, 0]]
 ```
 
 )doc");

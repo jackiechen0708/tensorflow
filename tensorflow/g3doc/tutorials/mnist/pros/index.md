@@ -9,7 +9,8 @@ while constructing a deep convolutional MNIST classifier.
 *This introduction assumes familiarity with neural networks and the MNIST
 dataset. If you don't have
 a background with them, check out the
-[introduction for beginners](../../../tutorials/mnist/beginners/index.md).*
+[introduction for beginners](../beginners/index.md). Be sure to
+[install TensorFlow](../../../get_started/os_setup.md) before starting.*
 
 ## Setup
 
@@ -19,12 +20,12 @@ TensorFlow session.
 ### Load MNIST Data
 
 For your convenience, we've included
-[a script](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/g3doc/tutorials/mnist/input_data.py)
+[a script](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/examples/tutorials/mnist/input_data.py)
 which automatically downloads and imports the MNIST dataset. It will create a
 directory `'MNIST_data'` in which to store the data files.
 
 ```python
-import input_data
+from tensorflow.examples.tutorials.mnist import input_data
 mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
 ```
 
@@ -46,7 +47,7 @@ It allows you to interleave operations which build a
 [computation graph](../../../get_started/basic_usage.md#the-computation-graph)
 with ones that run the graph.
 This is particularly convenient when working in interactive contexts like
-iPython.
+IPython.
 If you are not using an `InteractiveSession`, then you should build
 the entire computation graph before starting a session and [launching the
 graph](../../../get_started/basic_usage.md#launching-the-graph-in-a-session).
@@ -118,7 +119,7 @@ these like additional inputs, but TensorFlow has an even better way to handle
 them: `Variable`.
 A `Variable` is a value that lives in TensorFlow's computation graph.
 It can be used and even modified by the computation. In machine
-learning applications, one generally has the model paramaters be `Variable`s.
+learning applications, one generally has the model parameters be `Variable`s.
 
 ```python
 W = tf.Variable(tf.zeros([784,10]))
@@ -226,7 +227,7 @@ Finally, we can evaluate our accuracy on the test data. This should be about
 91% correct.
 
 ```python
-print accuracy.eval(feed_dict={x: mnist.test.images, y_: mnist.test.labels})
+print(accuracy.eval(feed_dict={x: mnist.test.images, y_: mnist.test.labels}))
 ```
 
 ## Build a Multilayer Convolutional Network
@@ -379,11 +380,11 @@ for i in range(20000):
   if i%100 == 0:
     train_accuracy = accuracy.eval(feed_dict={
         x:batch[0], y_: batch[1], keep_prob: 1.0})
-    print "step %d, training accuracy %g"%(i, train_accuracy)
+    print("step %d, training accuracy %g"%(i, train_accuracy))
   train_step.run(feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
 
-print "test accuracy %g"%accuracy.eval(feed_dict={
-    x: mnist.test.images, y_: mnist.test.labels, keep_prob: 1.0})
+print("test accuracy %g"%accuracy.eval(feed_dict={
+    x: mnist.test.images, y_: mnist.test.labels, keep_prob: 1.0}))
 ```
 
 The final test set accuracy after running this code should be approximately 99.2%.

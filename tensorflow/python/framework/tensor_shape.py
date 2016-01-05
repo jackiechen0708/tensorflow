@@ -20,6 +20,8 @@ from __future__ import print_function
 
 import tensorflow.python.platform
 
+from tensorflow.core.framework import tensor_shape_pb2
+
 
 class Dimension(object):
   """Represents the value of one dimension in a TensorShape."""
@@ -30,6 +32,8 @@ class Dimension(object):
       self._value = None
     else:
       self._value = int(value)
+      if self._value < 0:
+        raise ValueError("Dimension %d must be >= 0" % self._value)
 
   def __repr__(self):
     return "Dimension(%s)" % repr(self._value)
@@ -407,6 +411,8 @@ class TensorShape(object):
     # TODO(irving): Eliminate the single integer special case.
     if dims is None:
       self._dims = None
+    elif isinstance(dims, tensor_shape_pb2.TensorShapeProto):
+      self._dims = [as_dimension(dim.size) for dim in dims.dim]
     else:
       try:
         dims_iter = iter(dims)
@@ -419,6 +425,16 @@ class TensorShape(object):
 
   def __repr__(self):
     return "TensorShape(%s)" % self._dims
+
+  def __str__(self):
+    if self.ndims is None:
+      return "<unknown>"
+    elif self.ndims == 1:
+      length = self._dims[0].value
+      return "(%s,)" % (str(length) if length is not None else "?")
+    else:
+      return "(%s)" % ", ".join(str(d.value) if d.value is not None else "?"
+                                for d in self._dims)
 
   @property
   def dims(self):

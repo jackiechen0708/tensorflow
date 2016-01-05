@@ -34,6 +34,7 @@ dimension, and dense along all other dimensions.
 
 @@sparse_concat
 @@sparse_reorder
+@@sparse_split
 @@sparse_retain
 @@sparse_fill_empty_rows
 """
@@ -51,11 +52,11 @@ from tensorflow.python.framework import ops
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.framework import tensor_util
 from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import constant_op
 from tensorflow.python.ops import gen_sparse_ops
 from tensorflow.python.ops import math_ops
 # pylint: disable=wildcard-import
 from tensorflow.python.ops.gen_sparse_ops import *
+
 # pylint: enable=wildcard-import
 # pylint: disable=protected-access
 
@@ -129,12 +130,11 @@ def sparse_concat(concat_dim, sp_inputs, name=None):
   shapes = [sp_input.shape for sp_input in sp_inputs]
 
   output_ind, output_val, output_shape = (
-      gen_sparse_ops._sparse_concat(
-          inds,
-          vals,
-          shapes,
-          concat_dim,
-          name=name))
+      gen_sparse_ops._sparse_concat(inds,
+                                    vals,
+                                    shapes,
+                                    concat_dim,
+                                    name=name))
 
   return ops.SparseTensor(output_ind, output_val, output_shape)
 
@@ -208,14 +208,13 @@ def sparse_reorder(sp_input, name=None):
     raise TypeError("Input must be a SparseTensor")
 
   reordered_ind, reordered_val = (
-      gen_sparse_ops._sparse_reorder(
-          sp_input.indices,
-          sp_input.values,
-          sp_input.shape,
-          name=name))
+      gen_sparse_ops._sparse_reorder(sp_input.indices,
+                                     sp_input.values,
+                                     sp_input.shape,
+                                     name=name))
 
-  return ops.SparseTensor(
-      reordered_ind, reordered_val, array_ops.identity(sp_input.shape))
+  return ops.SparseTensor(reordered_ind, reordered_val,
+                          array_ops.identity(sp_input.shape))
 
 
 @ops.RegisterShape("SparseReorder")
@@ -226,6 +225,73 @@ def _SparseReorderShape(op):
   unused_shape_shape = op.inputs[2].get_shape().with_rank(1)
 
   return [input_indices_shape, input_values_shape]
+
+
+def sparse_split(split_dim, num_split, sp_input, name=None):
+  """Split a `SparseTensor` into `num_split` tensors along `split_dim`.
+
+  If the `sp_input.shape[split_dim]` is not an integer multiple of `num_split`
+  each slice starting from 0:`shape[split_dim] % num_split` gets extra one
+  dimension. For example, if `split_dim = 1` and `num_split = 2` and the
+  input is:
+
+      input_tensor = shape = [2, 7]
+      [    a   d e  ]
+      [b c          ]
+
+  Graphically the output tensors are:
+
+      output_tensor[0] =
+      [    a ]
+      [b c   ]
+
+      output_tensor[1] =
+      [ d e  ]
+      [      ]
+
+  Args:
+    split_dim: A 0-D `int32` `Tensor`. The dimension along which to split.
+    num_split: A Python integer. The number of ways to split.
+    sp_input: The `SparseTensor` to split.
+    name: A name for the operation (optional).
+
+  Returns:
+    `num_split` `SparseTensor` objects resulting from splitting `value`.
+
+  Raises:
+    TypeError: If `sp_input` is not a `SparseTensor`.
+  """
+  if not isinstance(sp_input, ops.SparseTensor):
+    raise TypeError("Input must be a SparseTensor")
+
+  output_inds, output_vals, output_shapes = (
+      gen_sparse_ops._sparse_split(split_dim,
+                                   sp_input.indices,
+                                   sp_input.values,
+                                   sp_input.shape,
+                                   num_split,
+                                   name=name))
+  sparse_tensors = []
+  for i in range(0, num_split):
+    sparse_tensors.append(ops.SparseTensor(output_inds[i], output_vals[i],
+                                           output_shapes[i]))
+  return sparse_tensors
+
+
+# pylint: disable=invalid-name
+@ops.RegisterShape("SparseSplit")
+def _SparseSplitShape(op):
+  """Shape function for SparseSplit op."""
+  num_split = int(op.get_attr("num_split"))
+  input_shape_shape = op.inputs[3].get_shape()
+  dim = input_shape_shape.num_elements()
+  output_indices_shape = tensor_shape.TensorShape([None, dim])
+  output_values_shape = tensor_shape.unknown_shape(1)
+  output_indices_shape = [output_indices_shape] * num_split
+  output_values_shape = [output_values_shape] * num_split
+  output_shape_shape = [input_shape_shape] * num_split
+  return output_indices_shape + output_values_shape + output_shape_shape
+# pylint: enable=invalid-name
 
 
 @ops.RegisterShape("SparseToDense")
@@ -240,7 +306,53 @@ def _SparseToDenseShape(op):
     return [tensor_shape.unknown_shape(ndims=input_shape_shape.num_elements())]
 
 
-def sparse_tensor_to_dense(sp_input, default_value, name=None):
+def sparse_to_dense(sparse_indices,
+                    output_shape,
+                    sparse_values,
+                    default_value=0,
+                    name=None):
+  """Converts a sparse representation into a dense tensor.
+
+  Builds an array `dense` with shape `output_shape` such that
+
+  ```python
+  # If sparse_indices is scalar
+  dense[i] = (i == sparse_indices ? sparse_values : default_value)
+
+  # If sparse_indices is a vector, then for each i
+  dense[sparse_indices[i]] = sparse_values[i]
+
+  # If sparse_indices is an n by d matrix, then for each i in [0, n)
+  dense[sparse_indices[i][0], ..., sparse_indices[i][d-1]] = sparse_values[i]
+  ```
+
+  All other values in `dense` are set to `default_value`.  If `sparse_values`
+  is a scalar, all sparse indices are set to this single value.
+
+  Args:
+    sparse_indices: A 0-D, 1-D, or 2-D `Tensor` of type `int32` or `int64`.
+      `sparse_indices[i]` contains the complete index where `sparse_values[i]`
+      will be placed.
+    output_shape: A 1-D `Tensor` of the same type as `sparse_indices`.  Shape
+      of the dense output tensor.
+    sparse_values: A 0-D or 1-D `Tensor`.  Values corresponding to each row of
+      `sparse_indices`, or a scalar value to be used for all sparse indices.
+    default_value: A 0-D `Tensor` of the same type as `sparse_values`.  Value
+      to set for indices not specified in `sparse_indices`.  Defaults to zero.
+    name: A name for the operation (optional).
+
+  Returns:
+    Dense `Tensor` of shape `output_shape`.  Has the same type as
+    `sparse_values`.
+  """
+  return gen_sparse_ops._sparse_to_dense(sparse_indices,
+                                         output_shape,
+                                         sparse_values,
+                                         default_value,
+                                         name=name)
+
+
+def sparse_tensor_to_dense(sp_input, default_value=0, name=None):
   """Converts a `SparseTensor` into a dense tensor.
 
   This op is a convenience wrapper around `sparse_to_dense` for `SparseTensor`s.
@@ -261,7 +373,7 @@ def sparse_tensor_to_dense(sp_input, default_value, name=None):
   Args:
     sp_input: The input `SparseTensor`.
     default_value: Scalar value to set for indices not specified in
-      `sp_input`.
+      `sp_input`.  Defaults to zero.
     name: A name prefix for the returned tensors (optional).
 
   Returns:
@@ -275,12 +387,11 @@ def sparse_tensor_to_dense(sp_input, default_value, name=None):
   if not isinstance(sp_input, ops.SparseTensor):
     raise TypeError("Input must be a SparseTensor")
 
-  return gen_sparse_ops.sparse_to_dense(
-      sp_input.indices,
-      sp_input.shape,
-      sp_input.values,
-      default_value,
-      name=name)
+  return sparse_to_dense(sp_input.indices,
+                         sp_input.shape,
+                         sp_input.values,
+                         default_value,
+                         name=name)
 
 
 def sparse_to_indicator(sp_input, vocab_size, name=None):
@@ -340,13 +451,12 @@ def sparse_to_indicator(sp_input, vocab_size, name=None):
     # Slice off the last dimension of indices, then then tack on the ids
     indices_columns_to_preserve = array_ops.slice(
         sp_input.indices, [0, 0], array_ops.pack([-1, rank - 1]))
-    new_indices = array_ops.concat(
-        1, [indices_columns_to_preserve, array_ops.reshape(ids, [-1, 1])])
+    new_indices = array_ops.concat(1, [indices_columns_to_preserve,
+                                       array_ops.reshape(ids, [-1, 1])])
 
     new_values = array_ops.fill(array_ops.expand_dims(num_entries, 0), True)
-    new_shape = array_ops.concat(
-        0, [array_ops.slice(sp_input.shape, [0],
-                            array_ops.expand_dims(rank - 1, 0)), [vocab_size]])
+    new_shape = array_ops.concat(0, [array_ops.slice(
+        sp_input.shape, [0], array_ops.expand_dims(rank - 1, 0)), [vocab_size]])
 
     sp_new = ops.SparseTensor(new_indices, new_values, new_shape)
 
@@ -393,8 +503,8 @@ def sparse_retain(sp_input, to_retain):
   where_true = array_ops.reshape(array_ops.where(to_retain), [-1])
   new_indices = array_ops.gather(sp_input.indices, where_true)
   new_values = array_ops.gather(sp_input.values, where_true)
-  return ops.SparseTensor(
-      new_indices, new_values, array_ops.identity(sp_input.shape))
+  return ops.SparseTensor(new_indices, new_values,
+                          array_ops.identity(sp_input.shape))
 
 
 def sparse_fill_empty_rows(sp_input, default_value, name=None):
@@ -448,31 +558,183 @@ def sparse_fill_empty_rows(sp_input, default_value, name=None):
     raise TypeError("Input must be a SparseTensor")
 
   with ops.op_scope([sp_input], name, "SparseFillEmptyRows"):
-    default_value = ops.convert_to_tensor(
-        default_value, dtype=sp_input.values.dtype)
+    default_value = ops.convert_to_tensor(default_value,
+                                          dtype=sp_input.values.dtype)
 
     num_rows = math_ops.cast(sp_input.shape[0], dtypes.int32)
     all_row_indices = math_ops.cast(math_ops.range(num_rows), dtypes.int64)
-    empty_row_indices, _ = array_ops.list_diff(
-        all_row_indices, sp_input.indices[:, 0])
-    empty_row_indicator = gen_sparse_ops.sparse_to_dense(
+    empty_row_indices, _ = array_ops.list_diff(all_row_indices,
+                                               sp_input.indices[:, 0])
+    empty_row_indicator = sparse_to_dense(
         empty_row_indices, array_ops.expand_dims(sp_input.shape[0], -1), True,
         False)
 
     empty_row_indices_as_column = array_ops.reshape(empty_row_indices, [-1, 1])
     additional_indices = array_ops.concat(
-        1,
-        [empty_row_indices_as_column,
-         array_ops.zeros_like(empty_row_indices_as_column)])
-    additional_values = array_ops.fill(array_ops.shape(empty_row_indices),
-                                       default_value)
+        1, [empty_row_indices_as_column,
+            array_ops.zeros_like(empty_row_indices_as_column)])
+    additional_values = array_ops.fill(
+        array_ops.shape(empty_row_indices), default_value)
 
-    all_indices_unordered = array_ops.concat(
-        0, [sp_input.indices, additional_indices])
-    all_values_unordered = array_ops.concat(
-        0, [sp_input.values, additional_values])
-    sp_unordered_output = ops.SparseTensor(
-        all_indices_unordered, all_values_unordered, sp_input.shape)
+    all_indices_unordered = array_ops.concat(0, [sp_input.indices,
+                                                 additional_indices])
+    all_values_unordered = array_ops.concat(0, [sp_input.values,
+                                                additional_values])
+    sp_unordered_output = ops.SparseTensor(all_indices_unordered,
+                                           all_values_unordered, sp_input.shape)
     sp_ordered_output = sparse_reorder(sp_unordered_output)
 
     return sp_ordered_output, empty_row_indicator
+
+
+def serialize_sparse(sp_input, name=None):
+  """Serialize a `SparseTensor` into a string 3-vector (1-D `Tensor`) object.
+
+  Args:
+    sp_input: The input `SparseTensor`.
+    name: A name prefix for the returned tensors (optional).
+
+  Returns:
+    A string 3-vector (1D `Tensor`), with each column representing the
+    serialized `SparseTensor`'s indices, values, and shape (respectively).
+
+  Raises:
+    TypeError: If `sp_input` is not a `SparseTensor`.
+  """
+  if not isinstance(sp_input, ops.SparseTensor):
+    raise TypeError("Input must be a SparseTensor.")
+
+  return gen_sparse_ops._serialize_sparse(
+      sp_input.indices,
+      sp_input.values,
+      sp_input.shape,
+      name=name)
+
+
+@ops.RegisterShape("SerializeSparse")
+def _SerializeSparseShape(op):  # pylint: disable=invalid-name
+  """Shape function for SerializeSparse op."""
+  op.inputs[0].get_shape().with_rank(2)
+  op.inputs[1].get_shape().with_rank(1)
+  op.inputs[2].get_shape().with_rank(1)
+
+  return [tensor_shape.vector(3)]
+
+
+def serialize_many_sparse(sp_input, name=None):
+  """Serialize an `N`-minibatch `SparseTensor` into an `[N, 3]` string `Tensor`.
+
+  The `SparseTensor` must have rank `R` greater than 1, and the first dimension
+  is treated as the minibatch dimension.  Elements of the `SparseTensor`
+  must be sorted in increasing order of this first dimension.  The serialized
+  `SparseTensor` objects going into each row of the output `Tensor` will have
+  rank `R-1`.
+
+  The minibatch size `N` is extracted from `sparse_shape[0]`.
+
+  Args:
+    sp_input: The input rank `R` `SparseTensor`.
+    name: A name prefix for the returned tensors (optional).
+
+  Returns:
+    A string matrix (2-D `Tensor`) with `N` rows and `3` columns.
+    Each column represents serialized `SparseTensor`'s indices, values, and
+    shape (respectively).
+
+  Raises:
+    TypeError: If `sp_input` is not a `SparseTensor`.
+  """
+  if not isinstance(sp_input, ops.SparseTensor):
+    raise TypeError("Input must be a SparseTensor.")
+
+  return gen_sparse_ops._serialize_many_sparse(
+      sp_input.indices,
+      sp_input.values,
+      sp_input.shape,
+      name=name)
+
+
+@ops.RegisterShape("SerializeManySparse")
+def _SerializeManySparseShape(op):  # pylint: disable=invalid-name
+  """Shape function for SerializeSparse op."""
+  op.inputs[0].get_shape().with_rank(2)
+  op.inputs[1].get_shape().with_rank(1)
+  op.inputs[2].get_shape().with_rank(1)
+
+  return [tensor_shape.matrix(None, 3)]
+
+
+def deserialize_many_sparse(serialized_sparse, dtype, name=None):
+  """Deserialize and concatenate `SparseTensors` from a serialized minibatch.
+
+  The input `serialized_sparse` must be a string matrix of shape `[N x 3]` where
+  `N` is the minibatch size and the rows correspond to packed outputs of
+  `serialize_sparse`.  The ranks of the original `SparseTensor` objects
+  must all match.  When the final `SparseTensor` is created, it has rank one
+  higher than the ranks of the incoming `SparseTensor` objects (they have been
+  concatenated along a new row dimension).
+
+  The output `SparseTensor` object's shape values for all dimensions but the
+  first are the max across the input `SparseTensor` objects' shape values
+  for the corresponding dimensions.  Its first shape value is `N`, the minibatch
+  size.
+
+  The input `SparseTensor` objects' indices are assumed ordered in
+  standard lexicographic order.  If this is not the case, after this
+  step run `sparse_reorder` to restore index ordering.
+
+  For example, if the serialized input is a `[2, 3]` matrix representing two
+  original `SparseTensor` objects:
+
+      index = [ 0]
+              [10]
+              [20]
+      values = [1, 2, 3]
+      shape = [50]
+
+  and
+
+      index = [ 2]
+              [10]
+      values = [4, 5]
+      shape = [30]
+
+  then the final deserialized `SparseTensor` will be:
+
+      index = [0  0]
+              [0 10]
+              [0 20]
+              [1  2]
+              [1 10]
+      values = [1, 2, 3, 4, 5]
+      shape = [2 50]
+
+  Args:
+    serialized_sparse: 2-D `Tensor` of type `string` of shape `[N, 3]`.
+      The serialized and packed `SparseTensor' objects.
+    dtype: The `dtype` of the serialized `SparseTensor` objects.
+    name: A name prefix for the returned tensors (optional)
+
+  Returns:
+    A `SparseTensor` representing the deserialized `SparseTensor`s,
+    concatenated along the `SparseTensor`s' first dimension.
+
+    All of the serialized `SparseTensor`s must have had the same rank and type.
+  """
+  output_indices, output_values, output_shape = (
+      gen_sparse_ops._deserialize_many_sparse(
+          serialized_sparse, dtype, name=name))
+
+  return ops.SparseTensor(output_indices, output_values, output_shape)
+
+
+@ops.RegisterShape("DeserializeManySparse")
+def _DeserializeSparseShape(op):  # pylint: disable=invalid-name
+  """Shape function for DeserializeManySparse op."""
+  serialized_sparse_shape = op.inputs[0].get_shape().with_rank(2)
+  serialized_sparse_shape.merge_with(
+      tensor_shape.TensorShape([None, 3]))
+
+  return [tensor_shape.matrix(None, None),
+          tensor_shape.vector(None),
+          tensor_shape.vector(None)]

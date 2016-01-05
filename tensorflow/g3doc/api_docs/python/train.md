@@ -30,7 +30,7 @@ class directly, but instead instantiate one of its subclasses such as
 # Create an optimizer with the desired parameters.
 opt = GradientDescentOptimizer(learning_rate=0.1)
 # Add Ops to the graph to minimize a cost by updating a list of variables.
-# "cost" is a Tensor, and the list of variables contains variables.Variable
+# "cost" is a Tensor, and the list of variables contains tf.Variable
 # objects.
 opt_op = opt.minimize(cost, <list of variables>)
 ```
@@ -145,7 +145,7 @@ given variable.
 
 
 *  <b>`loss`</b>: A Tensor containing the value to minimize.
-*  <b>`var_list`</b>: Optional list of variables.Variable to update to minimize
+*  <b>`var_list`</b>: Optional list of tf.Variable to update to minimize
     `loss`.  Defaults to the list of variables collected in the graph
     under the key `GraphKey.TRAINABLE_VARIABLES`.
 *  <b>`gate_gradients`</b>: How to gate the computation of gradients.  Can be
@@ -286,7 +286,7 @@ Construct a new gradient descent optimizer.
 
 *  <b>`learning_rate`</b>: A Tensor or a floating point value.  The learning
     rate to use.
-*  <b>`use_locking`</b>: If True use locks for update operation.s
+*  <b>`use_locking`</b>: If True use locks for update operations.
 *  <b>`name`</b>: Optional name prefix for the operations created when applying
     gradients. Defaults to "GradientDescent".
 
@@ -463,7 +463,7 @@ Optimizer that implements the RMSProp algorithm.
 
 - - -
 
-#### `tf.train.RMSPropOptimizer.__init__(learning_rate, decay, momentum=0.0, epsilon=1e-10, use_locking=False, name='RMSProp')` {#RMSPropOptimizer.__init__}
+#### `tf.train.RMSPropOptimizer.__init__(learning_rate, decay=0.9, momentum=0.0, epsilon=1e-10, use_locking=False, name='RMSProp')` {#RMSPropOptimizer.__init__}
 
 Construct a new RMSProp optimizer.
 
@@ -956,6 +956,7 @@ Maintains moving averages of variables.
 `var_list` must be a list of `Variable` or `Tensor` objects.  This method
 creates shadow variables for all elements of `var_list`.  Shadow variables
 for `Variable` objects are initialized to the variable's initial value.
+They will be added to the `GraphKeys.MOVING_AVERAGE_VARIABLES` collection.
 For `Tensor` objects, the shadow variables are initialized to 0.
 
 shadow variables are created with `trainable=False` and added to the
@@ -1031,6 +1032,37 @@ Returns the `Variable` holding the average of `var`.
   is not maintained..
 
 
+- - -
+
+#### `tf.train.ExponentialMovingAverage.variables_to_restore()` {#ExponentialMovingAverage.variables_to_restore}
+
+Returns a map of names to `Variables` to restore.
+
+If a variable has a moving average, use the moving average variable name as
+the restore name; otherwise, use the variable name.
+
+For example,
+
+```python
+  variables_to_restore = ema.variables_to_restore()
+  saver = tf.train.Saver(variables_to_restore)
+```
+
+Below is an example of such mapping:
+
+```
+  conv/batchnorm/gamma/ExponentialMovingAverage: conv/batchnorm/gamma,
+  conv_4/conv2d_params/ExponentialMovingAverage: conv_4/conv2d_params,
+  global_step: global_step
+```
+
+##### Returns:
+
+  A map from restore_names to variables. The restore_name can be the
+  moving_average version of the variable name if it exist, or the original
+  variable name.
+
+
 
 
 ## Coordinator and QueueRunner
@@ -1065,16 +1097,16 @@ to stop.  To cooperate with the requests, each thread must check for
 `coord.should_stop()` on a regular basis.  `coord.should_stop()` returns
 `True` as soon as `coord.request_stop()` has been called.
 
-A typical thread running with a Coordinator will do something like:
+A typical thread running with a coordinator will do something like:
 
 ```python
 while not coord.should_stop():
-   ...do some work...
+  ...do some work...
 ```
 
 #### Exception handling:
 
-A thread can report an exception to the Coordinator as part of the
+A thread can report an exception to the coordinator as part of the
 `should_stop()` call.  The exception will be re-raised from the
 `coord.join()` call.
 
@@ -1084,7 +1116,7 @@ Thread code:
 try:
   while not coord.should_stop():
     ...do some work...
-except Exception, e:
+except Exception as e:
   coord.request_stop(e)
 ```
 
@@ -1099,8 +1131,19 @@ try:
   ...start thread N...(coord, ...)
   # Wait for all the threads to terminate.
   coord.join(threads)
-except Exception, e:
+except Exception as e:
   ...exception that was passed to coord.request_stop()
+```
+
+To simplify the thread implementation, the Coordinator provides a
+context handler `stop_on_exception()` that automatically requests a stop if
+an exception is raised.  Using the context handler the thread code above
+can be written as:
+
+```python
+with coord.stop_on_exception():
+  while not coord.should_stop():
+    ...do some work...
 ```
 
 #### Grace period for stopping:
@@ -1110,7 +1153,7 @@ fixed time to stop, this is called the 'stop grace period' and defaults to 2
 minutes.  If any of the threads is still alive after the grace period expires
 `coord.join()` raises a RuntimeException reporting the laggards.
 
-```
+```python
 try:
   ...
   coord = Coordinator()
@@ -1188,6 +1231,41 @@ Check if stop was requested.
 ##### Returns:
 
   True if a stop was requested.
+
+
+- - -
+
+#### `tf.train.Coordinator.stop_on_exception()` {#Coordinator.stop_on_exception}
+
+Context manager to request stop when an Exception is raised.
+
+Code that uses a coordinator must catch exceptions and pass
+them to the `request_stop()` method to stop the other threads
+managed by the coordinator.
+
+This context handler simplifies the exception handling.
+Use it as follows:
+
+```python
+with coord.stop_on_exception():
+  # Any exception raised in the body of the with
+  # clause is reported to the coordinator before terminating
+  # the execution of the body.
+  ...body...
+```
+
+This is completely equivalent to the slightly longer code:
+
+```python
+try:
+  ...body...
+exception Exception as ex:
+  coord.request_stop(ex)
+```
+
+##### Yields:
+
+  nothing.
 
 
 - - -
@@ -1308,6 +1386,13 @@ depending on whether or not a `Coordinator` was passed to
   was captured.  (No exceptions are captured when using a Coordinator.)
 
 
+- - -
+
+#### `tf.train.QueueRunner.name` {#QueueRunner.name}
+
+The string name of the underlying Queue.
+
+
 
 - - -
 
@@ -1400,7 +1485,7 @@ summary has a summary value for each tag-value pair in `tags` and `values`.
 
 - - -
 
-### `tf.image_summary(tag, tensor, max_images=None, collections=None, name=None)` {#image_summary}
+### `tf.image_summary(tag, tensor, max_images=3, collections=None, name=None)` {#image_summary}
 
 Outputs a `Summary` protocol buffer with images.
 
@@ -1412,9 +1497,10 @@ height, width, channels]` and where `channels` can be:
 *  3: `tensor` is interpreted as RGB.
 *  4: `tensor` is interpreted as RGBA.
 
-The images have the same number of channels as the input tensor. Their values
-are normalized, one image at a time, to fit in the range `[0, 255]`.  The
-op uses two different normalization algorithms:
+The images have the same number of channels as the input tensor. For float
+input, the values are normalized one image at a time to fit in the range
+`[0, 255]`.  `uint8` values are unchanged.  The op uses two different
+normalization algorithms:
 
 *  If the input values are all positive, they are rescaled so the largest one
    is 255.
@@ -1435,8 +1521,8 @@ build the `tag` of the summary values:
 
 *  <b>`tag`</b>: A scalar `Tensor` of type `string`. Used to build the `tag`
     of the summary values.
-*  <b>`tensor`</b>: A 4-D `float32` `Tensor` of shape `[batch_size, height, width,
-   channels]` where `channels` is 1, 3, or 4.
+*  <b>`tensor`</b>: A 4-D `uint8` or `float32` `Tensor` of shape `[batch_size, height,
+    width, channels]` where `channels` is 1, 3, or 4.
 *  <b>`max_images`</b>: Max number of batch elements to generate images for.
 *  <b>`collections`</b>: Optional list of ops.GraphKeys.  The collections to add the
     summary to.  Defaults to [ops.GraphKeys.SUMMARIES]
@@ -1464,7 +1550,7 @@ This op reports an `OutOfRange` error if any value is not finite.
 
 
 *  <b>`tag`</b>: A `string` `Tensor`. 0-D.  Tag to use for the summary value.
-*  <b>`values`</b>: A `float32` or `float64` `Tensor`. Any shape. Values to use to
+*  <b>`values`</b>: A real numeric `Tensor`. Any shape. Values to use to
     build the histogram.
 *  <b>`collections`</b>: Optional list of graph collections keys. The new summary op is
     added to these collections. Defaults to `[GraphKeys.SUMMARIES]`.
@@ -1700,7 +1786,7 @@ Example: Print the contents of an events file.
 
 ```python
 for e in tf.summary_iterator(path to events file):
-    print e
+    print(e)
 ```
 
 Example: Print selected summary values.
@@ -1713,7 +1799,7 @@ Example: Print selected summary values.
 for e in tf.summary_iterator(path to events file):
     for v in e.summary.value:
         if v.tag == 'loss':
-            print v.simple_value
+            print(v.simple_value)
 ```
 
 See the protocol buffer definitions of
@@ -1748,7 +1834,7 @@ global_step_tensor = tf.Variable(10, trainable=False, name='global_step')
 sess = tf.Session()
 # Initializes the variable.
 sess.run(global_step_tensor.initializer)
-print 'global_step:', tf.train.global_step(sess, global_step_tensor)
+print('global_step: %s' % tf.train.global_step(sess, global_step_tensor))
 
 global_step: 10
 ```

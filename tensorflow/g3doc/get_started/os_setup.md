@@ -5,22 +5,22 @@ github source.
 
 ## Requirements
 
-The TensorFlow Python API currently requires Python 2.7.  We are
-[adding support for Python 3](https://github.com/tensorflow/tensorflow/issues/1).
+The TensorFlow Python API currently supports Python 2.7 and Python 3.3+ from
+source.
 
 The GPU version (Linux only) currently requires the Cuda Toolkit 7.0 and CUDNN
-6.5 V2.  Please see [Cuda installation](#install_cuda).
+6.5 V2.  Please see [Cuda installation](#optional-install-cuda-gpus-on-linux).
 
 ## Overview
 
 We support different ways to install TensorFlow:
 
-*  [Pip install](#pip_install): Install TensorFlow on your machine, possibly
+*  [Pip install](#pip-installation): Install TensorFlow on your machine, possibly
    upgrading previously installed Python packages.  May impact existing
    Python programs on your machine.
-*  [Virtualenv install](#virtualenv_install): Install TensorFlow in its own
+*  [Virtualenv install](#virtualenv-installation): Install TensorFlow in its own
    directory, not impacting any existing Python programs on your machine.
-*  [Docker install](#docker_install): Run TensorFlow in a Docker container
+*  [Docker install](#docker-installation): Run TensorFlow in a Docker container
    isolated from all other programs on your machine.
 
 If you are familiar with Pip, Virtualenv, or Docker, please feel free to adapt
@@ -28,9 +28,9 @@ the instructions to your particular needs.  The names of the pip and Docker
 images are listed in the corresponding installation sections.
 
 If you encounter installation errors, see
-[common problems](#common_install_problems) for some solutions.
+[common problems](#common-problems) for some solutions.
 
-## Pip Installation {#pip_install}
+## Pip Installation 
 
 [Pip](https://en.wikipedia.org/wiki/Pip_(package_manager)) is a package
 management system used to install and manage software packages written in
@@ -39,7 +39,7 @@ Python.
 The packages that will be installed or upgraded during the pip install are listed in the
 [REQUIRED_PACKAGES section of setup.py](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/tools/pip_package/setup.py)
 
-Install pip if not already installed:
+Install pip (or pip3 for python3) if it is not already installed:
 
 ```bash
 # Ubuntu/Linux 64-bit
@@ -53,19 +53,34 @@ Install TensorFlow:
 
 ```bash
 # Ubuntu/Linux 64-bit, CPU only:
-$ sudo pip install --upgrade https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-0.5.0-cp27-none-linux_x86_64.whl
+$ sudo pip install --upgrade https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-0.6.0-cp27-none-linux_x86_64.whl
 
 # Ubuntu/Linux 64-bit, GPU enabled:
-$ sudo pip install --upgrade https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow-0.5.0-cp27-none-linux_x86_64.whl
+$ sudo pip install --upgrade https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow-0.6.0-cp27-none-linux_x86_64.whl
 
 # Mac OS X, CPU only:
 $ sudo easy_install --upgrade six
-$ sudo pip install --upgrade https://storage.googleapis.com/tensorflow/mac/tensorflow-0.5.0-py2-none-any.whl
+$ sudo pip install --upgrade https://storage.googleapis.com/tensorflow/mac/tensorflow-0.6.0-py2-none-any.whl
 ```
 
-You can now [test your installation](#test_install).
+For python3:
 
-## Virtualenv installation {#virtualenv_install}
+```bash
+# Ubuntu/Linux 64-bit, CPU only:
+$ sudo pip3 install --upgrade https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-0.6.0-cp34-none-linux_x86_64.whl
+
+# Ubuntu/Linux 64-bit, GPU enabled:
+$ sudo pip3 install --upgrade https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow-0.6.0-cp34-none-linux_x86_64.whl
+
+# Mac OS X, CPU only:
+$ sudo easy_install --upgrade six
+$ sudo pip3 install --upgrade https://storage.googleapis.com/tensorflow/mac/tensorflow-0.6.0-py3-none-any.whl
+```
+
+
+You can now [test your installation](#test-the-tensorflow-installation).
+
+## Virtualenv installation 
 
 [Virtualenv](http://docs.python-guide.org/en/latest/dev/virtualenvs/) is a tool
 to keep the dependencies required by different Python projects in separate
@@ -106,20 +121,38 @@ $ source ~/tensorflow/bin/activate.csh  # If using csh
 (tensorflow)$  # Your prompt should change
 
 # Ubuntu/Linux 64-bit, CPU only:
-(tensorflow)$ pip install --upgrade https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-0.5.0-cp27-none-linux_x86_64.whl
+(tensorflow)$ pip install --upgrade https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-0.6.0-cp27-none-linux_x86_64.whl
 
 # Ubuntu/Linux 64-bit, GPU enabled:
-(tensorflow)$ pip install --upgrade https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow-0.5.0-cp27-none-linux_x86_64.whl
+(tensorflow)$ pip install --upgrade https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow-0.6.0-cp27-none-linux_x86_64.whl
 
 # Mac OS X, CPU only:
-(tensorflow)$ pip install --upgrade https://storage.googleapis.com/tensorflow/mac/tensorflow-0.5.0-py2-none-any.whl
+(tensorflow)$ pip install --upgrade https://storage.googleapis.com/tensorflow/mac/tensorflow-0.6.0-py2-none-any.whl
+```
+
+and again for python3:
+
+```bash
+$ source ~/tensorflow/bin/activate  # If using bash
+$ source ~/tensorflow/bin/activate.csh  # If using csh
+(tensorflow)$  # Your prompt should change
+
+# Ubuntu/Linux 64-bit, CPU only:
+(tensorflow)$ pip install --upgrade https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-0.6.0-cp34-none-linux_x86_64.whl
+
+# Ubuntu/Linux 64-bit, GPU enabled:
+(tensorflow)$ pip install --upgrade https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow-0.6.0-cp34-none-linux_x86_64.whl
+
+# Mac OS X, CPU only:
+(tensorflow)$ pip3 install --upgrade https://storage.googleapis.com/tensorflow/mac/tensorflow-0.6.0-py3-none-any.whl
 ```
 
 With the Virtualenv environment activated, you can now
-[test your installation](#test_install).
+[test your installation](#test-the-tensorflow-installation).
+
+When you are done using TensorFlow, deactivate the environment.
 
 ```bash
-# When you are done using TensorFlow, deactivate the environment.
 (tensorflow)$ deactivate
 
 $  # Your prompt should change back
@@ -137,30 +170,35 @@ $ source ~/tensorflow/bin/activate.csh  # If using csh.
 (tensorflow)$ deactivate
 ```
 
-## Docker installation {#docker_install}
+## Docker installation 
 
 [Docker](http://docker.com/) is a system to build self contained versions of a
 Linux operating system running on your machine.  When you install and run
 TensorFlow via Docker it completely isolates the installation from pre-existing
 packages on your machine.
 
-We provide 2 Docker images:
+We provide 4 Docker images:
 
-*  `b.gcr.io/tensorflow/tensorflow`: TensorFlow CPU binary image.
-*  `b.gcr.io/tensorflow/tensorflow-full`: CPU Binary image plus source code.
+* `b.gcr.io/tensorflow/tensorflow`: TensorFlow CPU binary image.
+* `b.gcr.io/tensorflow/tensorflow:latest-devel`: CPU Binary image plus source
+code.
+* `b.gcr.io/tensorflow/tensorflow:latest-gpu`: TensorFlow GPU binary image.
+* `b.gcr.io/tensorflow/tensorflow:latest-devel-gpu`: GPU Binary image plus source
+code.
+
+We also have tags with `latest` replaced by a released version (eg `0.6.0-gpu`).
 
 With Docker the installation is as follows:
 
 *  Install Docker on your machine.
+*  Create a [Docker
+group](http://docs.docker.com/engine/installation/ubuntulinux/#create-a-docker-group)
+to allow launching containers without `sudo`.
 *  Launch a Docker container with the TensorFlow image.  The image
    gets downloaded automatically on first launch.
 
 See [installing Docker](http://docs.docker.com/engine/installation/) for instructions
 on installing Docker on your machine.
-
-Also create a [Docker
-group](http://docs.docker.com/engine/installation/ubuntulinux/#create-a-docker-group)
-to allow launching containers without `sudo`.
 
 After Docker is installed, launch a Docker container with the TensorFlow binary
 image as follows.
@@ -169,21 +207,24 @@ image as follows.
 $ docker run -it b.gcr.io/tensorflow/tensorflow
 ```
 
-Within the Docker container, you can now [test your installation](#test_install).
-
-You can alternatively launch the TensorFlow source image, for example if you want
-to experiment directly with the source.
+If you're using a container with GPU support, some additional flags must be
+passed to expose the GPU device to the container. For the default config, we
+include a
+[script](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/tools/docker/docker_run_gpu.sh)
+in the repo with these flags, so the command-line would look like
 
 ```bash
-$ docker run -it b.gcr.io/tensorflow/tensorflow-full
+$ path/to/repo/tensorflow/tools/docker/docker_run_gpu.sh b.gcr.io/tensorflow/tensorflow:gpu
 ```
 
-## Test the TensorFlow installation {#test_install}
+You can now [test your installation](#test-the-tensorflow-installation) within the Docker container.
+
+## Test the TensorFlow installation 
 
 ### (Optional, Linux) Enable GPU Support
 
 If you installed the GPU version of TensorFlow, you must also install the Cuda
-Toolkit 7.0 and CUDNN 6.5 V2.  Please see [Cuda installation](#install_cuda).
+Toolkit 7.0 and CUDNN 6.5 V2.  Please see [Cuda installation](#optional-install-cuda-gpus-on-linux).
 
 You also need to set the `LD_LIBRARY_PATH` and `CUDA_HOME` environment
 variables.  Consider adding the commands below to your `~/.bash_profile`.  These
@@ -196,7 +237,7 @@ export CUDA_HOME=/usr/local/cuda
 
 ### Run TensorFlow from the Command Line
 
-See [common problems](#common_install_problems) if some error happens.
+See [common problems](#common-problems) if an error happens.
 
 Open a terminal and type the following:
 
@@ -206,11 +247,11 @@ $ python
 >>> import tensorflow as tf
 >>> hello = tf.constant('Hello, TensorFlow!')
 >>> sess = tf.Session()
->>> print sess.run(hello)
+>>> print(sess.run(hello))
 Hello, TensorFlow!
 >>> a = tf.constant(10)
 >>> b = tf.constant(32)
->>> print sess.run(a + b)
+>>> print(sess.run(a + b))
 42
 >>>
 ```
@@ -228,7 +269,7 @@ The exact location of the Python library depends on your system, but is usually 
 You can find out the directory with the following command:
 
 ```bash
-$ python -c 'import site; print "\n".join(site.getsitepackages())'
+$ python -c 'import site; print("\n".join(site.getsitepackages()))'
 ```
 
 The simple demo model for classifying handwritten digits from the MNIST dataset
@@ -249,7 +290,11 @@ $ python /usr/local/lib/python2.7/dist-packages/tensorflow/models/image/mnist/co
 ...
 ```
 
-## Installing from sources {#source}
+## Installing from sources 
+
+When installing from source you will build a pip wheel that you then install
+using pip. You'll need pip for that, so install it as described
+[above](#pip-installation).
 
 ### Clone the TensorFlow repository
 
@@ -264,7 +309,6 @@ depends on.
 
 #### Install Bazel
 
-
 Follow instructions [here](http://bazel.io/docs/install.html) to install the
 dependencies for Bazel. Then download bazel version 0.1.1 using the
 [installer for your system](https://github.com/bazelbuild/bazel/releases) and
@@ -275,11 +319,11 @@ $ chmod +x PATH_TO_INSTALL.SH
 $ ./PATH_TO_INSTALL.SH --user
 ```
 
-Remember to replace `PATH_TO_INSTALL.SH` to point to the location where you
+Remember to replace `PATH_TO_INSTALL.SH` with the location where you
 downloaded the installer.
 
-Finally, follow the instructions in that script to place bazel into your binary
-path.
+Finally, follow the instructions in that script to place `bazel` into your
+binary path.
 
 #### Install other dependencies
 
@@ -287,12 +331,26 @@ path.
 $ sudo apt-get install python-numpy swig python-dev
 ```
 
-#### Optional: Install CUDA (GPUs on Linux) {#install_cuda}
+#### Configure the installation 
+
+Run the `configure` script at the root of the tree.  The configure script
+asks you for the path to your python interpreter and allows (optional)
+configuration of the CUDA libraries (see [below](#configure-tensorflows-canonical-view-of-cuda-libraries)).
+
+This step is used to locate the python and numpy header files.
+
+```bash
+$ ./configure
+Please specify the location of python. [Default is /usr/bin/python]:
+```
+
+#### Optional: Install CUDA (GPUs on Linux) 
 
 In order to build or run TensorFlow with GPU support, both Cuda Toolkit 7.0 and
 CUDNN 6.5 V2 from NVIDIA need to be installed.
 
-TensorFlow GPU support requires having a GPU card with NVidia Compute Capability >= 3.5.  Supported cards include but are not limited to:
+TensorFlow GPU support requires having a GPU card with NVidia Compute Capability >= 3.5.
+Supported cards include but are not limited to:
 
 * NVidia Titan
 * NVidia Titan X
@@ -318,12 +376,14 @@ sudo cp cudnn-6.5-linux-x64-v2/cudnn.h /usr/local/cuda/include
 sudo cp cudnn-6.5-linux-x64-v2/libcudnn* /usr/local/cuda/lib64
 ```
 
-##### Configure TensorFlow's canonical view of Cuda libraries
-From the root of your source tree, run:
+##### Configure TensorFlow's canonical view of Cuda libraries 
+When running the `configure` script from the root of your source tree, select
+the option `Y` when asked to build TensorFlow with GPU support.
 
 ``` bash
 $ ./configure
-Do you wish to build TensorFlow with GPU support? [y/n] y
+Please specify the location of python. [Default is /usr/bin/python]:
+Do you wish to build TensorFlow with GPU support? [y/N] y
 GPU support will be enabled for TensorFlow
 
 Please specify the location where CUDA 7.0 toolkit is installed. Refer to
@@ -395,33 +455,56 @@ configs in the same source tree.
 
 * You have to run configure before running bazel build. Otherwise, the build
 will fail with a clear error message. In the future, we might consider making
-this more conveninent by including the configure step in our build process,
+this more convenient by including the configure step in our build process,
 given necessary bazel new feature support.
 
 ### Installation for Mac OS X
 
-Mac needs the same set of dependencies as Linux, however installing those
-dependencies is different. Here is a set of useful links to help with installing
-the dependencies on Mac OS X :
+We recommend using [homebrew](http://brew.sh) to install the bazel and SWIG
+dependencies, and installing python dependencies using easy_install or pip.
 
-#### Bazel
+Of course you can also install Swig from source without using homebrew. In that
+case, be sure to install its dependency [PCRE](from www.pcre.org) and not PCRE2.
 
-Look for installation instructions for Mac OS X on
-[this](http://bazel.io/docs/install.html) page.
+#### Dependencies
 
-#### SWIG
+Follow instructions [here](http://bazel.io/docs/install.html) to install the
+dependencies for Bazel. You can then use homebrew to install bazel and SWIG:
 
-[Mac OS X installation](http://www.swig.org/Doc3.0/Preface.html#Preface_osx_installation).
+```bash
+$ brew install bazel swig
+```
 
-Notes : You need to install
-[PCRE](ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/) and *NOT* PCRE2.
+You can install the python dependencies using easy_install or pip. Using
+easy_install, run
 
-#### Numpy
+```bash
+$ sudo easy_install -U six
+$ sudo easy_install -U numpy
+$ sudo easy_install wheel
+```
 
-Follow installation instructions [here](http://docs.scipy.org/doc/numpy/user/install.html).
+We also recommend the [ipython](https://ipython.org) enhanced python shell, so
+best install that too:
 
+```bash
+$ sudo easy_install ipython
+```
 
-### Create the pip package and install {#create-pip}
+#### Configure the installation 
+
+Run the `configure` script at the root of the tree.  The configure script
+asks you for the path to your python interpreter.
+
+This step is used to locate the python and numpy header files.
+
+```bash
+$ ./configure
+Please specify the location of python. [Default is /usr/bin/python]:
+Do you wish to build TensorFlow with GPU support? [y/N]
+```
+
+### Create the pip package and install 
 
 ```bash
 $ bazel build -c opt //tensorflow/tools/pip_package:build_pip_package
@@ -432,7 +515,7 @@ $ bazel build -c opt --config=cuda //tensorflow/tools/pip_package:build_pip_pack
 $ bazel-bin/tensorflow/tools/pip_package/build_pip_package /tmp/tensorflow_pkg
 
 # The name of the .whl file will depend on your platform.
-$ pip install /tmp/tensorflow_pkg/tensorflow-0.5.0-cp27-none-linux_x86_64.whl
+$ pip install /tmp/tensorflow_pkg/tensorflow-0.6.0-cp27-none-linux_x86_64.whl
 ```
 
 ## Train your first TensorFlow neural net model
@@ -442,10 +525,10 @@ Starting from the root of your source tree, run:
 ```python
 $ cd tensorflow/models/image/mnist
 $ python convolutional.py
-Succesfully downloaded train-images-idx3-ubyte.gz 9912422 bytes.
-Succesfully downloaded train-labels-idx1-ubyte.gz 28881 bytes.
-Succesfully downloaded t10k-images-idx3-ubyte.gz 1648877 bytes.
-Succesfully downloaded t10k-labels-idx1-ubyte.gz 4542 bytes.
+Successfully downloaded train-images-idx3-ubyte.gz 9912422 bytes.
+Successfully downloaded train-labels-idx1-ubyte.gz 28881 bytes.
+Successfully downloaded t10k-images-idx3-ubyte.gz 1648877 bytes.
+Successfully downloaded t10k-labels-idx1-ubyte.gz 4542 bytes.
 Extracting data/train-images-idx3-ubyte.gz
 Extracting data/train-labels-idx1-ubyte.gz
 Extracting data/t10k-images-idx3-ubyte.gz
@@ -463,7 +546,7 @@ Validation error: 7.0%
 ...
 ```
 
-## Common Problems {#common_install_problems}
+## Common Problems 
 
 ### GPU-related issues
 
@@ -473,7 +556,7 @@ If you encounter the following when trying to run a TensorFlow program:
 ImportError: libcudart.so.7.0: cannot open shared object file: No such file or directory
 ```
 
-Make sure you followed the the GPU installation [instructions](#install_cuda).
+Make sure you followed the the GPU installation [instructions](#optional-install-cuda-gpus-on-linux).
 
 ### Pip installation issues
 
@@ -486,13 +569,13 @@ If, during `pip install`, you encounter an error like:
 IOError: [Errno 2] No such file or directory: '/tmp/pip-o6Tpui-build/setup.py'
 ```
 
-Solution: upgrade your version of `pip`:
+Solution: upgrade your version of pip:
 
 ```bash
 pip install --upgrade pip
 ```
 
-This may require `sudo`, depending on how `pip` is installed.
+This may require `sudo`, depending on how pip is installed.
 
 #### SSLError: SSL_VERIFY_FAILED
 
@@ -505,7 +588,7 @@ SSLError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed
 
 Solution: Download the wheel manually via curl or wget, and pip install locally.
 
-### On Linux
+### Linux issues
 
 If you encounter:
 
@@ -533,7 +616,7 @@ Solution: TensorFlow depends on protobuf, which requires the Python package
 
 You can resolve the issue in one of the following ways:
 
-* Upgrade the Python installation with the current version `six`:
+* Upgrade the Python installation with the current version of `six`:
 
 ```bash
 $ sudo easy_install -U six
@@ -541,14 +624,23 @@ $ sudo easy_install -U six
 
 * Install TensorFlow with a separate Python library:
 
-    *  Using [Virtualenv](#virtualenv_install).
-    *  Using [Docker](#docker_install).
+    *  Using [Virtualenv](#virtualenv-installation).
+    *  Using [Docker](#docker-installation).
 
 * Install a separate copy of Python via [Homebrew](http://brew.sh/) or
 [MacPorts](https://www.macports.org/) and re-install TensorFlow in that
 copy of Python.
 
-# Mac OS X: TypeError: `__init__()` got an unexpected keyword argument 'syntax'
+### Mac OS X: OSError: [Errno 1] Operation not permitted:
+
+On El Capitan, "six" is a special package that can't be modified, and this
+error is reported when "pip install" tried to modify this package. To fix use
+"ignore_installed" flag, ie
+
+sudo pip install --ignore-installed six https://storage.googleapis.com/....
+
+
+### Mac OS X: TypeError: `__init__()` got an unexpected keyword argument 'syntax'
 
 On Mac OS X, you may encounter the following when importing tensorflow.
 

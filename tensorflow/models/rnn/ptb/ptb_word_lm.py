@@ -19,11 +19,6 @@ Trains the model described in:
 (Zaremba, et. al.) Recurrent Neural Network Regularization
 http://arxiv.org/abs/1409.2329
 
-The data required for this example is in the data/ dir of the
-PTB dataset from Tomas Mikolov's webpage:
-
-http://www.fit.vutbr.cz/~imikolov/rnnlm/simple-examples.tgz
-
 There are 3 supported model configurations:
 ===========================================
 | config | epochs | train | valid  | test
@@ -46,13 +41,15 @@ The hyperparameters used in the model:
 - lr_decay - the decay of the learning rate for each epoch after "max_epoch"
 - batch_size - the batch size
 
-To compile on CPU:
-  bazel build -c opt tensorflow/models/rnn/ptb:ptb_word_lm
-To compile on GPU:
-  bazel build -c opt tensorflow --config=cuda \
-    tensorflow/models/rnn/ptb:ptb_word_lm
+The data required for this example is in the data/ dir of the
+PTB dataset from Tomas Mikolov's webpage:
+
+$ wget http://www.fit.vutbr.cz/~imikolov/rnnlm/simple-examples.tgz
+$ tar xvf simple-examples.tgz
+
 To run:
-  ./bazel-bin/.../ptb_word_lm --data_path=/tmp/simple-examples/data/
+
+$ python ptb_word_lm.py --data_path=simple-examples/data/
 
 """
 from __future__ import absolute_import
@@ -106,12 +103,10 @@ class PTBModel(object):
 
     with tf.device("/cpu:0"):
       embedding = tf.get_variable("embedding", [vocab_size, size])
-      inputs = tf.split(
-          1, num_steps, tf.nn.embedding_lookup(embedding, self._input_data))
-      inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
+      inputs = tf.nn.embedding_lookup(embedding, self._input_data)
 
     if is_training and config.keep_prob < 1:
-      inputs = [tf.nn.dropout(input_, config.keep_prob) for input_ in inputs]
+      inputs = tf.nn.dropout(inputs, config.keep_prob)
 
     # Simplified version of tensorflow.models.rnn.rnn.py's rnn().
     # This builds an unrolled LSTM for tutorial purposes only.
@@ -120,14 +115,16 @@ class PTBModel(object):
     # The alternative version of the code below is:
     #
     # from tensorflow.models.rnn import rnn
+    # inputs = [tf.squeeze(input_, [1])
+    #           for input_ in tf.split(1, num_steps, inputs)]
     # outputs, states = rnn.rnn(cell, inputs, initial_state=self._initial_state)
     outputs = []
     states = []
     state = self._initial_state
     with tf.variable_scope("RNN"):
-      for time_step, input_ in enumerate(inputs):
+      for time_step in range(num_steps):
         if time_step > 0: tf.get_variable_scope().reuse_variables()
-        (cell_output, state) = cell(input_, state)
+        (cell_output, state) = cell(inputs[:, time_step, :], state)
         outputs.append(cell_output)
         states.append(state)
 

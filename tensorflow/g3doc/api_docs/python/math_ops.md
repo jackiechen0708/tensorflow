@@ -863,6 +863,56 @@ containing the Cholesky decompositions for all input submatrices `[..., :, :]`.
 
 
 
+- - -
+
+### `tf.self_adjoint_eig(input, name=None)` {#self_adjoint_eig}
+
+Calculates the Eigen Decomposition of a square Self-Adjoint matrix.
+
+Only the lower-triangular part of the input will be used in this case. The
+upper-triangular part will not be read.
+
+The result is a M+1 x M matrix whose first row is the eigenvalues, and
+subsequent rows are eigenvectors.
+
+##### Args:
+
+
+*  <b>`input`</b>: A `Tensor`. Must be one of the following types: `float64`, `float32`.
+    Shape is `[M, M]`.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A `Tensor`. Has the same type as `input`. Shape is `[M+1, M]`.
+
+
+- - -
+
+### `tf.batch_self_adjoint_eig(input, name=None)` {#batch_self_adjoint_eig}
+
+Calculates the Eigen Decomposition of a batch of square self-adjoint matrices.
+
+The input is a tensor of shape `[..., M, M]` whose inner-most 2 dimensions
+form square matrices, with the same constraints as the single matrix
+SelfAdjointEig.
+
+The result is a '[..., M+1, M] matrix with [..., 0,:] containing the
+eigenvalues, and subsequent [...,1:, :] containing the eigenvectors.
+
+##### Args:
+
+
+*  <b>`input`</b>: A `Tensor`. Must be one of the following types: `float64`, `float32`.
+    Shape is `[..., M, M]`.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A `Tensor`. Has the same type as `input`. Shape is `[..., M+1, M]`.
+
+
+
 ## Complex Number Functions
 
 TensorFlow provides several operations that you can use to add complex number
@@ -1019,6 +1069,40 @@ tf.real(in) ==> [-2.25, 3.25]
   A `Tensor` of type `float32`.
 
 
+- - -
+
+### `tf.fft2d(in_, name=None)` {#fft2d}
+
+Compute the 2-dimensional discrete Fourier Transform.
+
+##### Args:
+
+
+*  <b>`in_`</b>: A `Tensor` of type `complex64`. A complex64 matrix.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A `Tensor` of type `complex64`. The 2D Fourier Transform of `in`.
+
+
+- - -
+
+### `tf.ifft2d(in_, name=None)` {#ifft2d}
+
+Compute the inverse 2-dimensional discrete Fourier Transform.
+
+##### Args:
+
+
+*  <b>`in_`</b>: A `Tensor` of type `complex64`. A complex64 matrix.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A `Tensor` of type `complex64`. The inverse 2D Fourier Transform of `in`.
+
+
 
 ## Reduction
 
@@ -1042,7 +1126,7 @@ tensor with a single element is returned.
 For example:
 
 ```python
-# 'x' is [[1, 1, 1]]
+# 'x' is [[1, 1, 1]
 #         [1, 1, 1]]
 tf.reduce_sum(x) ==> 6
 tf.reduce_sum(x, 0) ==> [2, 2, 2]
@@ -1166,7 +1250,7 @@ tensor with a single element is returned.
 For example:
 
 ```python
-# 'x' is [[1., 1. ]]
+# 'x' is [[1., 1.]
 #         [2., 2.]]
 tf.reduce_mean(x) ==> 1.5
 tf.reduce_mean(x, 0) ==> [1.5, 1.5]
@@ -1204,7 +1288,7 @@ tensor with a single element is returned.
 For example:
 
 ```python
-# 'x' is [[True,  True]]
+# 'x' is [[True,  True]
 #         [False, False]]
 tf.reduce_all(x) ==> False
 tf.reduce_all(x, 0) ==> [False, False]
@@ -1242,7 +1326,7 @@ tensor with a single element is returned.
 For example:
 
 ```python
-# 'x' is [[True,  True]]
+# 'x' is [[True,  True]
 #         [False, False]]
 tf.reduce_any(x) ==> True
 tf.reduce_any(x, 0) ==> [True, True]
@@ -1340,7 +1424,7 @@ Computes a tensor such that
 that `segment_ids[j] == i`.
 
 <div style="width:70%; margin:auto; margin-bottom:10px; margin-top:20px;">
-<img style="width:100%" src="../images/SegmentSum.png" alt>
+<img style="width:100%" src="../../images/SegmentSum.png" alt>
 </div>
 
 ##### Args:
@@ -1374,7 +1458,7 @@ Computes a tensor such that
 that `segment_ids[j] == i`.
 
 <div style="width:70%; margin:auto; margin-bottom:10px; margin-top:20px;">
-<img style="width:100%" src="../images/SegmentProd.png" alt>
+<img style="width:100%" src="../../images/SegmentProd.png" alt>
 </div>
 
 ##### Args:
@@ -1408,7 +1492,7 @@ Computes a tensor such that
 that `segment_ids[j] == i`.
 
 <div style="width:70%; margin:auto; margin-bottom:10px; margin-top:20px;">
-<img style="width:100%" src="../images/SegmentMin.png" alt>
+<img style="width:100%" src="../../images/SegmentMin.png" alt>
 </div>
 
 ##### Args:
@@ -1441,7 +1525,7 @@ Computes a tensor such that
 that `segment_ids[j] == i`.
 
 <div style="width:70%; margin:auto; margin-bottom:10px; margin-top:20px;">
-<img style="width:100%" src="../images/SegmentMax.png" alt>
+<img style="width:100%" src="../../images/SegmentMax.png" alt>
 </div>
 
 ##### Args:
@@ -1476,7 +1560,7 @@ over `j` such that `segment_ids[j] == i` and `N` is the total number of
 values summed.
 
 <div style="width:70%; margin:auto; margin-bottom:10px; margin-top:20px;">
-<img style="width:100%" src="../images/SegmentMean.png" alt>
+<img style="width:100%" src="../../images/SegmentMean.png" alt>
 </div>
 
 ##### Args:
@@ -1517,7 +1601,7 @@ If the sum is empty for a given segment ID `i`, `output[i] = 0`.
 `num_segments` should equal the number of distinct segment IDs.
 
 <div style="width:70%; margin:auto; margin-bottom:10px; margin-top:20px;">
-<img style="width:100%" src="../images/UnsortedSegmentSum.png" alt>
+<img style="width:100%" src="../../images/UnsortedSegmentSum.png" alt>
 </div>
 
 ##### Args:

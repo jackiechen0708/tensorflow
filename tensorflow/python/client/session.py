@@ -163,7 +163,7 @@ class BaseSession(SessionInterface):
 
     with sess.as_default():
       assert tf.get_default_session() is sess
-      print c.eval()
+      print(c.eval())
     ```
 
     To get the current default session, use
@@ -178,10 +178,10 @@ class BaseSession(SessionInterface):
     c = tf.constant(...)
     sess = tf.Session()
     with sess.as_default():
-      print c.eval()
+      print(c.eval())
     # ...
     with sess.as_default():
-      print c.eval()
+      print(c.eval())
 
     sess.close()
     ```
@@ -354,14 +354,19 @@ class BaseSession(SessionInterface):
                          + e.message)
             e.args = (e.message,)
             raise e
+
+          if isinstance(subfeed_val, ops.Tensor):
+            raise TypeError('The value of a feed cannot be a tf.Tensor object. '
+                            'Acceptable feed values include Python scalars, '
+                            'strings, lists, or numpy ndarrays.')
+
           np_val = np.array(subfeed_val, dtype=subfeed_t.dtype.as_numpy_dtype)
           if subfeed_t.op.type == 'Placeholder':
             if not subfeed_t.get_shape().is_compatible_with(np_val.shape):
               raise ValueError(
                   'Cannot feed value of shape %r for Tensor %r, '
                   'which has shape %r'
-                  % (np_val.shape, subfeed_t.name,
-                     tuple(subfeed_t.get_shape().dims)))
+                  % (np_val.shape, subfeed_t.name, str(subfeed_t.get_shape())))
           feed_dict_string[compat.as_bytes(subfeed_t.name)] = np_val
 
     # Run request and get response.
@@ -463,7 +468,7 @@ class Session(BaseSession):
   sess = tf.Session()
 
   # Evaluate the tensor `c`.
-  print sess.run(c)
+  print(sess.run(c))
   ```
 
   A session may own resources, such as
@@ -568,7 +573,7 @@ class InteractiveSession(BaseSession):
   b = tf.constant(6.0)
   c = a * b
   # We can just use 'c.eval()' without passing 'sess'
-  print c.eval()
+  print(c.eval())
   sess.close()
   ```
 
@@ -582,7 +587,7 @@ class InteractiveSession(BaseSession):
   c = a * b
   with tf.Session():
     # We can also use 'c.eval()' here.
-    print c.eval()
+    print(c.eval())
   ```
 
   @@__init__

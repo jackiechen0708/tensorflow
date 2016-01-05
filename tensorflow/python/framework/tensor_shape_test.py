@@ -21,6 +21,7 @@ from __future__ import print_function
 import tensorflow.python.platform
 
 from tensorflow.python.framework import tensor_shape
+from tensorflow.python.framework import tensor_util
 from tensorflow.python.framework import test_util
 from tensorflow.python.platform import googletest
 
@@ -253,6 +254,33 @@ class ShapeTest(test_util.TensorFlowTestCase):
     self.assertEqual((unknown // unknown).value, None)
     with self.assertRaisesRegexp(TypeError, r"unsupported operand type"):
       unknown / unknown  # pylint: disable=pointless-statement
+
+  def testConvertFromProto(self):
+    proto = tensor_util.MakeTensorShapeProto([])
+    self.assertEqual(tensor_shape.TensorShape([]),
+                     tensor_shape.TensorShape(proto))
+    self.assertEqual(tensor_shape.TensorShape([]),
+                     tensor_shape.as_shape(proto))
+
+    proto = tensor_util.MakeTensorShapeProto([1, 37, 42])
+    self.assertEqual(tensor_shape.TensorShape([1, 37, 42]),
+                     tensor_shape.TensorShape(proto))
+    self.assertEqual(tensor_shape.TensorShape([1, 37, 42]),
+                     tensor_shape.as_shape(proto))
+
+  def testStr(self):
+    self.assertEqual("<unknown>", str(tensor_shape.unknown_shape()))
+    self.assertEqual("(?,)", str(tensor_shape.unknown_shape(ndims=1)))
+    self.assertEqual("(?, ?)", str(tensor_shape.unknown_shape(ndims=2)))
+    self.assertEqual("(?, ?, ?)", str(tensor_shape.unknown_shape(ndims=3)))
+
+    self.assertEqual("()", str(tensor_shape.scalar()))
+    self.assertEqual("(7,)", str(tensor_shape.vector(7)))
+    self.assertEqual("(3, 8)", str(tensor_shape.matrix(3, 8)))
+    self.assertEqual("(4, 5, 2)", str(tensor_shape.TensorShape([4, 5, 2])))
+
+    self.assertEqual("(32, ?, 1, 9)",
+                     str(tensor_shape.TensorShape([32, None, 1, 9])))
 
 
 if __name__ == "__main__":

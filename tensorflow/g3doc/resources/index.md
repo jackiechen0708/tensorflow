@@ -4,7 +4,7 @@
 ## TensorFlow WhitePaper
 
 Additional details about the TensorFlow programming model and the underlying
-implementation can be found in out white paper:
+implementation can be found in our white paper:
 
 * [TensorFlow: Large-scale machine learning on heterogeneous systems](http://download.tensorflow.org/paper/whitepaper2015.pdf)
 
@@ -54,15 +54,4 @@ the [TensorFlow issues tracker](
 https://github.com/tensorflow/tensorflow/issues) on GitHub.
 If you need help with using TensorFlow, please do not use the issue
 tracker for that. Instead, direct your questions to [Stack Overflow](https://stackoverflow.com/questions/tagged/tensorflow).
-
-<div class='sections-order' style="display: none;">
-<!--
-<!-- bib.md -->
-<!-- uses.md -->
-<!-- faq.md -->
-<!-- glossary.md -->
-<!-- dims_types.md -->
--->
-</div>
-
 

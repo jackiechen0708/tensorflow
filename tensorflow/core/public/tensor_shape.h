@@ -20,11 +20,13 @@ limitations under the License.
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/framework/tensor_shape.pb.h"
+#include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/stringpiece.h"
 #include "tensorflow/core/lib/gtl/array_slice.h"
 #include "tensorflow/core/lib/gtl/inlined_vector.h"
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/platform/logging.h"
+#include "tensorflow/core/public/status.h"
 
 namespace tensorflow {
 
@@ -48,6 +50,10 @@ class TensorShape {
 
   /// Returns `true` iff `proto` is a valid tensor shape.
   static bool IsValid(const TensorShapeProto& proto);
+
+  /// Returns `OK` iff `proto` is a valid tensor shape, and a descriptive error
+  /// status otherwise.
+  static Status IsValidShape(const TensorShapeProto& proto);
 
   /// Clear a tensor shape
   void Clear();
@@ -118,8 +124,13 @@ class TensorShape {
 
   /// For error messages.
   string DebugString() const;
-  // TODO(vrv): Remove this, this is the same as DebugString().
   string ShortDebugString() const;
+  // TODO(vrv): Consolidate DebugString() and ShortDebugString() into one
+  // function that is not verbose and works for scalars.
+
+  /// Same as `TensorShape(proto).ShortDebugString()` but doesn't crash for
+  /// invalid protos.
+  static string ShortDebugString(const TensorShapeProto& proto);
 
  private:
   // Recalculates the dimensions of this tensor after they are modified.
@@ -200,10 +211,16 @@ class TensorShapeUtils {
   /// \brief Returns a `TensorShape` whose dimensions are
   /// `dims[0]`, `dims[1]`, ..., `dims[n-1]`.
   template <typename T>
-  static TensorShape MakeShape(const T* dims, int n) {
-    TensorShape shape;
-    for (int i = 0; i < n; ++i) shape.AddDim(dims[i]);
-    return shape;
+  static Status MakeShape(const T* dims, int n, TensorShape* out) {
+    *out = TensorShape();
+    for (int i = 0; i < n; ++i) {
+      if (dims[i] >= 0) {
+        out->AddDim(dims[i]);
+      } else {
+        return errors::InvalidArgument("Dimension ", dims[i], " must be >= 0");
+      }
+    }
+    return Status::OK();
   }
 
   static string ShapeListString(const gtl::ArraySlice<TensorShape>& shapes) {

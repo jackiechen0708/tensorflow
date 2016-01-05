@@ -19,6 +19,7 @@ cc_library(
     ),
     hdrs = glob([
         "*.h",
+        "cuda/*.h",
         "lib/*.h",
         "platform/**/*.h",
     ]),
@@ -26,6 +27,7 @@ cc_library(
         "//tensorflow/core:cuda",
         "//third_party/gpus/cuda:cublas",
         "//third_party/gpus/cuda:cudnn",
+        "//third_party/gpus/cuda:cufft",
     ],
     linkopts = [
         "-ldl",

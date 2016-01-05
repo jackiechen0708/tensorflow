@@ -22,7 +22,7 @@ REGISTER_OP("ResizeArea")
     .Input("images: T")
     .Input("size: int32")
     .Output("resized_images: float")
-    .Attr("T: {uint8, int8, int32, float, double}")
+    .Attr("T: {uint8, int8, int16, int32, int64, float, double}")
     .Doc(R"doc(
 Resize `images` to `size` using area interpolation.
 
@@ -31,7 +31,7 @@ Input images can be of different types but output images are always float.
 images: 4-D with shape `[batch, height, width, channels]`.
 size:= A 1-D int32 Tensor of 2 elements: `new_height, new_width`.  The
   new size for the images.
-resized_images:  4-D with shape
+resized_images: 4-D with shape
   `[batch, new_height, new_width, channels]`.
 )doc");
 
@@ -40,7 +40,7 @@ REGISTER_OP("ResizeBicubic")
     .Input("images: T")
     .Input("size: int32")
     .Output("resized_images: float")
-    .Attr("T: {uint8, int8, int32, float, double}")
+    .Attr("T: {uint8, int8, int16, int32, int64, float, double}")
     .Doc(R"doc(
 Resize `images` to `size` using bicubic interpolation.
 
@@ -49,7 +49,7 @@ Input images can be of different types but output images are always float.
 images: 4-D with shape `[batch, height, width, channels]`.
 size:= A 1-D int32 Tensor of 2 elements: `new_height, new_width`.  The
   new size for the images.
-resized_images:  4-D with shape
+resized_images: 4-D with shape
   `[batch, new_height, new_width, channels]`.
 )doc");
 
@@ -58,7 +58,7 @@ REGISTER_OP("ResizeBilinear")
     .Input("images: T")
     .Input("size: int32")
     .Output("resized_images: float")
-    .Attr("T: {uint8, int8, int32, float, double}")
+    .Attr("T: {uint8, int8, int16, int32, int64, float, double}")
     .Doc(R"doc(
 Resize `images` to `size` using bilinear interpolation.
 
@@ -67,8 +67,25 @@ Input images can be of different types but output images are always float.
 images: 4-D with shape `[batch, height, width, channels]`.
 size:= A 1-D int32 Tensor of 2 elements: `new_height, new_width`.  The
   new size for the images.
-resized_images:  4-D with shape
+resized_images: 4-D with shape
   `[batch, new_height, new_width, channels]`.
+)doc");
+
+// --------------------------------------------------------------------------
+REGISTER_OP("ResizeBilinearGrad")
+    .Input("grads: float")
+    .Input("original_image: T")
+    .Output("output: T")
+    .Attr("T: {float, double}")
+    .Doc(R"doc(
+Computes the gradient of bilinear interpolation.
+
+grads: 4-D with shape `[batch, height, width, channels]`.
+original_image: 4-D with shape `[batch, orig_height, orig_width, channels]`,
+  The image tensor that was resized.
+output: 4-D with shape `[batch, orig_height, orig_width, channels]`.
+  Gradients with respect to the input image. Input image must have been
+  float or double.
 )doc");
 
 // --------------------------------------------------------------------------
@@ -76,16 +93,14 @@ REGISTER_OP("ResizeNearestNeighbor")
     .Input("images: T")
     .Input("size: int32")
     .Output("resized_images: T")
-    .Attr("T: {uint8, int8, int32, float, double}")
+    .Attr("T: {uint8, int8, int16, int32, int64, float, double}")
     .Doc(R"doc(
 Resize `images` to `size` using nearest neighbor interpolation.
-
-Input images can be of different types but output images are always float.
 
 images: 4-D with shape `[batch, height, width, channels]`.
 size:= A 1-D int32 Tensor of 2 elements: `new_height, new_width`.  The
   new size for the images.
-resized_images:  4-D with shape
+resized_images: 4-D with shape
   `[batch, new_height, new_width, channels]`.
 )doc");
 
@@ -229,6 +244,15 @@ REGISTER_OP("AdjustContrast")
     .Output("output: float")
     .Attr("T: {uint8, int8, int16, int32, int64, float, double}")
     .Doc(R"Doc(
+Deprecated. Disallowed in GraphDef version >= 2.
+)Doc");
+
+// --------------------------------------------------------------------------
+REGISTER_OP("AdjustContrastv2")
+    .Input("images: float")
+    .Input("contrast_factor: float")
+    .Output("output: float")
+    .Doc(R"Doc(
 Adjust the contrast of one or more images.
 
 `images` is a tensor of at least 3 dimensions.  The last 3 dimensions are
@@ -241,13 +265,8 @@ For each channel, the Op first computes the mean of the image pixels in the
 channel and then adjusts each component of each pixel to
 `(x - mean) * contrast_factor + mean`.
 
-These adjusted values are then clipped to fit in the `[min_value, max_value]`
-interval.
-
-`images: Images to adjust.  At least 3-D.
+images: Images to adjust.  At least 3-D.
 contrast_factor: A float multiplier for adjusting contrast.
-min_value: Minimum value for clipping the adjusted pixels.
-max_value: Maximum value for clipping the adjusted pixels.
 output: The constrast-adjusted image or images.
 )Doc");
 
@@ -299,6 +318,42 @@ the smallest output, but is slower.
 image: 3-D with shape `[height, width, channels]`.
 compression: Compression level.
 contents: 0-D. PNG-encoded image.
+)doc");
+
+// --------------------------------------------------------------------------
+REGISTER_OP("RGBToHSV")
+    .Input("images: float")
+    .Output("output: float")
+    .Doc(R"doc(
+Converts one or more images from RGB to HSV.
+
+Outputs a tensor of the same shape as the `images` tensor, containing the HSV
+value of the pixels. The output is only well defined if the value in `images`
+are in `[0,1]`.
+
+`output[..., 0]` contains hue, `output[..., 1]` contains saturation, and
+`output[..., 2]` contains value. All HSV values are in `[0,1]`. A hue of 0
+corresponds to pure red, hue 1/3 is pure green, and 2/3 is pure blue.
+
+images: 1-D or higher rank. RGB data to convert. Last dimension must be size 3.
+output: `images` converted to HSV.
+)doc");
+
+// --------------------------------------------------------------------------
+REGISTER_OP("HSVToRGB")
+    .Input("images: float")
+    .Output("output: float")
+    .Doc(R"doc(
+Convert one or more images from HSV to RGB.
+
+Outputs a tensor of the same shape as the `images` tensor, containing the RGB
+value of the pixels. The output is only well defined if the value in `images`
+are in `[0,1]`.
+
+See `rgb_to_hsv` for a description of the HSV encoding.
+
+images: 1-D or higher rank. HSV data to convert. Last dimension must be size 3.
+output: `images` converted to RGB.
 )doc");
 
 }  // namespace tensorflow

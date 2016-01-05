@@ -296,8 +296,8 @@ This is not a graph construction method, it does not add ops to the graph.
 
 This convenience method requires a session where the graph containing this
 variable has been launched. If no session is passed, the default session is
-used.  See the [Session class](../../api_docs/python/client.md#Session) for more information on
-launching a graph and on sessions.
+used.  See the [Session class](../../api_docs/python/client.md#Session) for
+more information on launching a graph and on sessions.
 
 ```python
 v = tf.Variable([1, 2])
@@ -306,10 +306,10 @@ init = tf.initialize_all_variables()
 with tf.Session() as sess:
     sess.run(init)
     # Usage passing the session explicitly.
-    print v.eval(sess)
+    print(v.eval(sess))
     # Usage with the default session.  The 'with' block
     # above makes 'sess' the default session.
-    print v.eval()
+    print(v.eval())
 ```
 
 ##### Args:
@@ -456,6 +456,22 @@ When passed `trainable=True`, the `Variable()` constructor automatically
 adds new variables to the graph collection
 `GraphKeys.TRAINABLE_VARIABLES`. This convenience function returns the
 contents of that collection.
+
+##### Returns:
+
+  A list of Variable objects.
+
+
+- - -
+
+### `tf.moving_average_variables()` {#moving_average_variables}
+
+Returns all variables that maintain their moving averages.
+
+If an `ExponentialMovingAverage` object is created and the `apply()`
+method is called on a list of variables, these variables will
+be added to the `GraphKeys.MOVING_AVERAGE_VARIABLES` collection.
+This convenience function returns the contents of that collection.
 
 ##### Returns:
 
@@ -890,9 +906,9 @@ the constructor is used. If that one is `None` too, a
 *  <b>`dtype`</b>: type of the new or existing variable (defaults to `DT_FLOAT`).
 *  <b>`initializer`</b>: initializer for the variable if one is created.
 *  <b>`trainable`</b>: If `True` also add the variable to the graph collection
-    `GraphKeys.TRAINABLE_VARIABLES` (see variables.Variable).
+    `GraphKeys.TRAINABLE_VARIABLES` (see tf.Variable).
 *  <b>`collections`</b>: List of graph collections keys to add the Variable to.
-    Defaults to `[GraphKeys.VARIABLES]` (see variables.Variable).
+    Defaults to `[GraphKeys.VARIABLES]` (see tf.Variable).
 
 ##### Returns:
 
@@ -911,6 +927,156 @@ the constructor is used. If that one is `None` too, a
 ### `tf.get_variable_scope()` {#get_variable_scope}
 
 Returns the current variable scope.
+
+
+- - -
+
+### `tf.make_template(name_, func_, **kwargs)` {#make_template}
+
+Given an arbitrary function, wrap it so that it does variable sharing.
+
+This wraps `func_` in a Template and partially evaluates it. Templates are
+functions that create variables the first time they are called and reuse them
+thereafter. In order for `func_` to be compatible with a `Template` it must
+have the following properties:
+
+* The function should create all trainable variables and any variables that
+   should be reused by calling `tf.get_variable`. If a trainable variable is
+   created using `tf.Variable`, then a ValueError will be thrown. Variables
+   that are intended to be locals can be created by specifying
+   `tf.Variable(..., trainable=false)`.
+* The function may use variable scopes and other templates internally to
+    create and reuse variables, but it shouldn't use `tf.get_variables` to
+    capture variables that are defined outside of the scope of the function.
+* Internal scopes and variable names should not depend on any arguments that
+    are not supplied to `make_template`. In general you will get a ValueError
+    telling you that you are trying to reuse a variable that doesn't exist
+    if you make a mistake.
+
+In the following example, both `z` and `w` will be scaled by the same `y`. It
+is important to note that if we didn't assign `scalar_name` and used a
+different name for z and w that a `ValueError` would be thrown because it
+couldn't reuse the variable.
+
+```python
+def my_op(x, scalar_name):
+  var1 = tf.get_variable(scalar_name,
+                         shape=[],
+                         initializer=tf.constant_initializer(1))
+  return x * var1
+
+scale_by_y = tf.make_template('scale_by_y', my_op, scalar_name='y')
+
+z = scale_by_y(input1)
+w = scale_by_y(input2)
+```
+
+As a safe-guard, the returned function will raise a `ValueError` after the
+first call if trainable variables are created by calling `tf.Variable`.
+
+If all of these are true, then 2 properties are enforced by the template:
+
+1. Calling the same template multiple times will share all non-local
+    variables.
+2. Two different templates are guaranteed to be unique, unless you reenter the
+    same variable scope as the initial definition of a template and redefine
+    it. An examples of this exception:
+
+```python
+def my_op(x, scalar_name):
+  var1 = tf.get_variable(scalar_name,
+                         shape=[],
+                         initializer=tf.constant_initializer(1))
+  return x * var1
+
+with tf.variable_scope('scope') as vs:
+  scale_by_y = tf.make_template('scale_by_y', my_op, scalar_name='y')
+  z = scale_by_y(input1)
+  w = scale_by_y(input2)
+
+# Creates a template that reuses the variables above.
+with tf.variable_scope(vs, reuse=True):
+  scale_by_y2 = tf.make_template('scale_by_y', my_op, scalar_name='y')
+  z2 = scale_by_y2(input1)
+  w2 = scale_by_y2(input2)
+```
+
+Note: The full variable scope is captured at the time of the first call.
+
+Note: `name_` and `func_` have a following underscore to reduce the likelihood
+of collisions with kwargs.
+
+##### Args:
+
+
+*  <b>`name_`</b>: A name for the scope created by this template. If necessary, the name
+    will be made unique by appending `_N` to the name.
+*  <b>`func_`</b>: The function to wrap.
+*  <b>`**kwargs`</b>: Keyword arguments to apply to `func_`.
+
+##### Returns:
+
+  A function that will enter a `variable_scope` before calling `func_`. The
+  first time it is called, it will create a non-reusing scope so that the
+  variables will be unique.  On each subsequent call, it will reuse those
+  variables.
+
+##### Raises:
+
+
+*  <b>`ValueError`</b>: if the name is None.
+
+
+- - -
+
+### `tf.variable_op_scope(values, name, default_name, initializer=None)` {#variable_op_scope}
+
+Returns a context manager for defining an op that creates variables.
+
+This context manager validates that the given `values` are from the
+same graph, ensures that that graph is the default graph, and pushes a
+name scope and a variable scope.
+
+If `name` is not None, it is used as is in the variable scope. If `name`
+is None, then `default_name` is used.  In that case, if the same name has been
+previously used in the same scope, it will made unique be appending `_N` to
+it.
+
+This is intended to be used when defining generic ops and so reuse is always
+inherited.
+
+For example, to define a new Python op called `my_op_with_vars`:
+
+```python
+def my_op_with_vars(a, b, name=None):
+  with tf.variable_op_scope([a, b], name, "MyOp") as scope:
+    a = tf.convert_to_tensor(a, name="a")
+    b = tf.convert_to_tensor(b, name="b")
+    c = tf.get_variable('c')
+    # Define some computation that uses `a`, `b`, and `c`.
+    return foo_op(..., name=scope)
+```
+
+##### Args:
+
+
+*  <b>`values`</b>: The list of `Tensor` arguments that are passed to the op function.
+*  <b>`name`</b>: The name argument that is passed to the op function, this name is not
+    uniquified in the variable scope.
+*  <b>`default_name`</b>: The default name to use if the `name` argument is `None`, this
+    name will be uniquified.
+*  <b>`initializer`</b>: A default initializer to pass to variable scope.
+
+##### Returns:
+
+  A context manager for use in defining a Python op.
+
+##### Raises:
+
+
+*  <b>`ValueError`</b>: when trying to reuse within a create scope, or create within
+    a reuse scope, or if reuse is not `None` or `True`.
+*  <b>`TypeError`</b>: when the types of some arguments are not appropriate.
 
 
 - - -
@@ -946,7 +1112,7 @@ assert v1 == v
 Sharing a variable by capturing a scope and setting reuse:
 
 ```python
-with tf.variable_scope("foo") as scope.
+with tf.variable_scope("foo") as scope:
     v = tf.get_variable("v", [1])
     scope.reuse_variables()
     v1 = tf.get_variable("v", [1])
@@ -957,7 +1123,7 @@ To prevent accidental sharing of variables, we raise an exception when
 getting an existing variable in a non-reusing scope.
 
 ```python
-with tf.variable_scope("foo") as scope.
+with tf.variable_scope("foo"):
     v = tf.get_variable("v", [1])
     v1 = tf.get_variable("v", [1])
     #  Raises ValueError("... v already exists ...").
@@ -983,7 +1149,7 @@ then all its sub-scopes become reusing as well.
     well as all sub-scopes; if `None`, we just inherit the parent scope reuse.
 *  <b>`initializer`</b>: default initializer for variables within this scope.
 
-##### Yields:
+##### Returns:
 
   A scope that can be to captured and reused.
 
@@ -1167,7 +1333,7 @@ override earlier entries.
 Requires `updates.shape = indices.shape + ref.shape[1:]`.
 
 <div style="width:70%; margin:auto; margin-bottom:10px; margin-top:20px;">
-<img style="width:100%" src="../images/ScatterUpdate.png" alt>
+<img style="width:100%" src="../../images/ScatterUpdate.png" alt>
 </div>
 
 ##### Args:
@@ -1215,7 +1381,7 @@ the same location, their contributions add.
 Requires `updates.shape = indices.shape + ref.shape[1:]`.
 
 <div style="width:70%; margin:auto; margin-bottom:10px; margin-top:20px;">
-<img style="width:100%" src="../images/ScatterAdd.png" alt>
+<img style="width:100%" src="../../images/ScatterAdd.png" alt>
 </div>
 
 ##### Args:
@@ -1262,7 +1428,7 @@ the same location, their (negated) contributions add.
 Requires `updates.shape = indices.shape + ref.shape[1:]`.
 
 <div style="width:70%; margin:auto; margin-bottom:10px; margin-top:20px;">
-<img style="width:100%" src="../images/ScatterSub.png" alt>
+<img style="width:100%" src="../../images/ScatterSub.png" alt>
 </div>
 
 ##### Args:
@@ -1413,6 +1579,15 @@ The name of the device on which `values` will be produced, or `None`.
 #### `tf.IndexedSlices.op` {#IndexedSlices.op}
 
 The `Operation` that produces `values` as an output.
+
+
+
+#### Other Methods
+- - -
+
+#### `tf.IndexedSlices.graph` {#IndexedSlices.graph}
+
+The `Graph` that contains the values, indices, and shape tensors.
 
 
 

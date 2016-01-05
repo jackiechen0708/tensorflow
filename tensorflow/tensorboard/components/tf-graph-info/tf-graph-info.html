@@ -1,4 +1,4 @@
-<link rel="import" href="../../bower_components/polymer/polymer.html">
+<link rel="import" href="../polymer/polymer.html">
 <link rel="import" href="tf-node-info.html">
 <dom-module id="tf-graph-info">
 <template>
@@ -22,6 +22,7 @@ h2 {
                   render-hierarchy="[[renderHierarchy]]"
                   flat-graph="[[graph]]"
                   node-name="[[selectedNode]]"
+                  node-include="[[selectedNodeInclude]]"
                   highlighted-node="{{highlightedNode}}"
                   color-by="[[colorBy]]">
     </tf-node-info>
@@ -46,6 +47,11 @@ h2 {
       },
       highlightedNode: {
         type: String,
+        notify: true
+      },
+      // The enum value of the include property of the selected node.
+      selectedNodeInclude: {
+        type: Number,
         notify: true
       }
     },

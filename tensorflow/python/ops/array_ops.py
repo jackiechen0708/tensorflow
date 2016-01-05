@@ -335,7 +335,10 @@ def _ConcatShape(op):
         value.get_shape().assert_has_rank(rank)
       else:
         rank = value.get_shape().ndims
-    return [tensor_shape.unknown_shape(ndims=max(rank, 1))]
+    # TODO(irving): Remove once !kAllowLegacyScalars.
+    if rank is not None:
+      rank = max(rank, 1)
+    return [tensor_shape.unknown_shape(ndims=rank)]
 
   else:
     # Merge all the non-concat dims, and sum the concat dim to make an
@@ -643,10 +646,10 @@ def placeholder(dtype, shape=None, name=None):
   y = tf.matmul(x, x)
 
   with tf.Session() as sess:
-    print sess.run(y)  # ERROR: will fail because x was not fed.
+    print(sess.run(y))  # ERROR: will fail because x was not fed.
 
     rand_array = np.random.rand(1024, 1024)
-    print sess.run(y, feed_dict={x: rand_array})  # Will succeed.
+    print(sess.run(y, feed_dict={x: rand_array}))  # Will succeed.
   ```
 
   Args:
@@ -841,6 +844,12 @@ def _SqueezeShape(op):
 def _ReshapeShape(op):
   """Shape function for Reshape op."""
   input_shape = op.inputs[0].get_shape()
+  if input_shape.ndims is not None:
+    num_elements = tensor_shape.Dimension(1)
+    for dim in input_shape.dims:
+      num_elements *= dim
+  else:
+    num_elements = tensor_shape.Dimension(None)
   new_shape_shape = op.inputs[1].get_shape().with_rank_at_most(1)
   new_shape = tensor_util.ConstantValue(op.inputs[1])
   if new_shape is None:
@@ -850,13 +859,15 @@ def _ReshapeShape(op):
   new_shape = np.reshape(new_shape, -1).tolist()
   if -1 not in new_shape:
     # The new shape is fully defined.
+    if (num_elements.value is not None
+        and num_elements.value != np.prod(new_shape)):
+      raise ValueError(
+          "Cannot reshape a tensor with %d elements to shape %s (%d elements)"
+          % (num_elements.value, new_shape, np.prod(new_shape)))
     return [tensor_shape.TensorShape(new_shape)]
-  elif input_shape.is_fully_defined():
-    # We know the input shape, so we can calculate the missing
+  elif num_elements.value is not None:
+    # We know the number of elements, so we can calculate the missing
     # dimension in the new_shape.
-    num_elements = 1
-    for dim in input_shape.dims:
-      num_elements *= dim.value
     known_elements = 1
     unknown_index = None
     for i, dim in enumerate(new_shape):

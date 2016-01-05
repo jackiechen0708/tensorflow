@@ -35,6 +35,7 @@ limitations under the License.
 #if GOOGLE_CUDA
 #include "tensorflow/stream_executor/stream.h"
 #include "tensorflow/core/common_runtime/gpu_device_context.h"
+#include "tensorflow/core/kernels/conv_ops_gpu.h"
 #endif  // GOOGLE_CUDA
 
 namespace tensorflow {
@@ -263,16 +264,18 @@ typedef Eigen::GpuDevice GPUDevice;
           << ", strides = " << strides[1]
 
 namespace {
-TensorShape VectorToShape(const TTypes<int32>::ConstVec& sizes) {
-  TensorShape shape;
-
+Status VectorToShape(const TTypes<int32>::ConstVec& sizes, TensorShape* out) {
   using Index = TTypes<int32>::ConstVec::Index;
   const Index dims = sizes.size();
   for (Index i = 0; i < dims; ++i) {
-    shape.AddDim(sizes(i));
+    if (sizes(i) >= 0) {
+      out->AddDim(sizes(i));
+    } else {
+      return errors::InvalidArgument("Dimension ", sizes(i), " must be >= 0");
+    }
   }
 
-  return shape;
+  return Status::OK();
 }
 }  // namespace
 
@@ -308,7 +311,9 @@ class Conv2DFastBackpropInputOp : public OpKernel {
         errors::InvalidArgument(
             "Conv2DBackpropInput: input_sizes input must be 1-dim, not ",
             input_sizes.dims()));
-    TensorShape input_shape = VectorToShape(input_sizes.vec<int32>());
+    TensorShape input_shape;
+    OP_REQUIRES_OK(context,
+                   VectorToShape(input_sizes.vec<int32>(), &input_shape));
     const TensorShape& filter_shape = filter.shape();
 
     EXTRACT_AND_VERIFY_DIMENSIONS("Conv2DBackpropInput");
@@ -358,7 +363,9 @@ class Conv2DCustomBackpropInputOp : public OpKernel {
         errors::InvalidArgument(
             "Conv2DBackpropInput: input_sizes input must be 1-dim, not ",
             input_sizes.dims()));
-    TensorShape input_shape = VectorToShape(input_sizes.vec<int32>());
+    TensorShape input_shape;
+    OP_REQUIRES_OK(context,
+                   VectorToShape(input_sizes.vec<int32>(), &input_shape));
     const TensorShape& filter_shape = filter.shape();
 
     EXTRACT_AND_VERIFY_DIMENSIONS("Conv2DBackpropInput");
@@ -565,7 +572,9 @@ class Conv2DFastBackpropFilterOp : public OpKernel {
             "Conv2DBackpropFilter: filter_sizes input must be 1-dim, not ",
             filter_sizes.dims()));
     const TensorShape& input_shape = input.shape();
-    TensorShape filter_shape = VectorToShape(filter_sizes.vec<int32>());
+    TensorShape filter_shape;
+    OP_REQUIRES_OK(context,
+                   VectorToShape(filter_sizes.vec<int32>(), &filter_shape));
 
     EXTRACT_AND_VERIFY_DIMENSIONS("Conv2DBackpropFilter");
     Tensor* filter_backprop = nullptr;
@@ -617,7 +626,9 @@ class Conv2DCustomBackpropFilterOp : public OpKernel {
             "not ",
             filter_sizes.dims()));
     const TensorShape& input_shape = input.shape();
-    TensorShape filter_shape = VectorToShape(filter_sizes.vec<int32>());
+    TensorShape filter_shape;
+    OP_REQUIRES_OK(context,
+                   VectorToShape(filter_sizes.vec<int32>(), &filter_shape));
 
     EXTRACT_AND_VERIFY_DIMENSIONS("Conv2DCustomBackpropFilter");
     Tensor* filter_backprop;
@@ -756,17 +767,6 @@ REGISTER_KERNEL_BUILDER(Name("Conv2DBackpropFilter")
 
 // GPU definitions of both ops.
 #if GOOGLE_CUDA
-namespace {
-template <typename T>
-perftools::gputools::DeviceMemory<T> AsDeviceMemory(const T* cuda_memory,
-                                                    uint64 size) {
-  perftools::gputools::DeviceMemoryBase wrapped(const_cast<T*>(cuda_memory),
-                                                size * sizeof(T));
-  perftools::gputools::DeviceMemory<T> typed(wrapped);
-  return typed;
-}
-}  // namespace
-
 // The slow version (but compiles for GPU)
 
 // Backprop for input.
@@ -800,7 +800,9 @@ class Conv2DSlowBackpropInputOp : public OpKernel {
         errors::InvalidArgument(
             "Conv2DBackpropInput: input_sizes input must be 1-dim, not ",
             input_sizes.dims()));
-    TensorShape input_shape = VectorToShape(input_sizes.vec<int32>());
+    TensorShape input_shape;
+    OP_REQUIRES_OK(context,
+                   VectorToShape(input_sizes.vec<int32>(), &input_shape));
     const TensorShape& filter_shape = filter.shape();
 
     EXTRACT_AND_VERIFY_DIMENSIONS("Conv2DBackpropInput");
@@ -818,13 +820,13 @@ class Conv2DSlowBackpropInputOp : public OpKernel {
     // TODO(keveman): cuDNN only supports equal padding on both sides, so only
     // calling it when that is true. Remove this check when (if?) cuDNN starts
     // supporting different padding.
-    bool padding_compatible =
-        (padding_rows % 2 == 0) && (padding_cols % 2 == 0);
+    bool rows_odd = (padding_rows % 2 != 0);
+    bool cols_odd = (padding_cols % 2 != 0);
 
     auto* stream = context->op_device_context<GPUDeviceContext>()->stream();
     OP_REQUIRES(context, stream, errors::Internal("No GPU stream available."));
 
-    if (use_cudnn_ && padding_compatible) {
+    if (use_cudnn_) {
       if (filter_rows == 1 && filter_cols == 1 && stride == 1) {
         // 1x1 filter, so call cublas directly.
         const uint64 m = batch * input_rows * input_cols;
@@ -852,10 +854,22 @@ class Conv2DSlowBackpropInputOp : public OpKernel {
         return;
       }
 
+      TensorShape compatible_input_shape;
+      if (rows_odd || cols_odd) {
+        // If a padding dimension is odd, we have one more element on the right
+        // side or the bottom side. This is unsupported in cudnn. Therefore,
+        // we pad that extra element and make it compatible.
+        compatible_input_shape = TensorShape(
+            {input_shape.dim_size(0), input_shape.dim_size(1) + rows_odd,
+             input_shape.dim_size(2) + cols_odd, input_shape.dim_size(3)});
+      } else {
+        compatible_input_shape = input_shape;
+      }
+
       perftools::gputools::dnn::BatchDescriptor input_desc;
       input_desc.set_count(batch)
-          .set_height(input_rows)
-          .set_width(input_cols)
+          .set_height(compatible_input_shape.dim_size(1))
+          .set_width(compatible_input_shape.dim_size(2))
           .set_feature_map_count(in_depth)
           .set_layout(perftools::gputools::dnn::DataLayout::kBatchDepthYX);
       perftools::gputools::dnn::BatchDescriptor output_desc;
@@ -913,11 +927,15 @@ class Conv2DSlowBackpropInputOp : public OpKernel {
                                        transformed_out_backprop.tensor<T, 4>());
 
       Tensor pre_transformed_in_backprop;
-      OP_REQUIRES_OK(context,
-                     context->allocate_temp(
-                         DataTypeToEnum<T>::value,
-                         TensorShape({batch, in_depth, input_rows, input_cols}),
-                         &pre_transformed_in_backprop));
+      OP_REQUIRES_OK(context, context->allocate_temp(
+                                  DataTypeToEnum<T>::value,
+                                  TensorShape({
+                                      compatible_input_shape.dim_size(0),
+                                      compatible_input_shape.dim_size(3),
+                                      compatible_input_shape.dim_size(1),
+                                      compatible_input_shape.dim_size(2),
+                                  }),
+                                  &pre_transformed_in_backprop));
 
       auto out_backprop_ptr =
           AsDeviceMemory(transformed_out_backprop.template flat<T>().data(),
@@ -929,10 +947,15 @@ class Conv2DSlowBackpropInputOp : public OpKernel {
           AsDeviceMemory(pre_transformed_in_backprop.template flat<T>().data(),
                          pre_transformed_in_backprop.template flat<T>().size());
 
+      static int64 ConvolveBackwardDataScratchSize = GetCudnnWorkspaceLimit(
+          "TF_CUDNN_WORKSPACE_LIMIT_IN_MB", 1LL << 32  // 4GB by default
+          );
+      CudnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
+                                              context);
       bool cudnn_launch_status =
-          stream->ThenConvolveBackwardData(filter_desc, filter_ptr, output_desc,
-                                           out_backprop_ptr, conv_desc,
-                                           input_desc, &in_backprop_ptr)
+          stream->ThenConvolveBackwardDataWithScratch(
+                    filter_desc, filter_ptr, output_desc, out_backprop_ptr,
+                    conv_desc, input_desc, &in_backprop_ptr, &scratch_allocator)
               .ok();
 
       if (!cudnn_launch_status) {
@@ -940,6 +963,28 @@ class Conv2DSlowBackpropInputOp : public OpKernel {
             "cuDNN Backward Data function launch failure : input shape(",
             input_shape.DebugString(), ") filter shape(",
             filter_shape.DebugString(), ")"));
+      }
+
+      if (rows_odd || cols_odd) {
+        Tensor in_backprop_remove_padding;
+        OP_REQUIRES_OK(context,
+                       context->allocate_temp(
+                           DataTypeToEnum<T>::value,
+                           TensorShape({
+                               input_shape.dim_size(0), input_shape.dim_size(3),
+                               input_shape.dim_size(1), input_shape.dim_size(2),
+                           }),
+                           &in_backprop_remove_padding));
+
+        // Remove the padding for odd rows or cols.
+        functor::PadInput<GPUDevice, T, int>()(
+            context->template eigen_device<GPUDevice>(),
+            To32Bit(const_cast<const Tensor&>(pre_transformed_in_backprop)
+                        .tensor<T, 4>()),
+            0, -rows_odd, 0, -cols_odd,
+            To32Bit(in_backprop_remove_padding.tensor<T, 4>()));
+
+        pre_transformed_in_backprop = in_backprop_remove_padding;
       }
 
       auto toConstTensor = [](const Tensor& x) -> const Tensor { return x; };
@@ -1034,7 +1079,9 @@ class Conv2DSlowBackpropFilterOp : public OpKernel {
             "Conv2DBackpropFilter: filter_sizes input must be 1-dim, not ",
             filter_sizes.dims()));
     const TensorShape& input_shape = input.shape();
-    TensorShape filter_shape = VectorToShape(filter_sizes.vec<int32>());
+    TensorShape filter_shape;
+    OP_REQUIRES_OK(context,
+                   VectorToShape(filter_sizes.vec<int32>(), &filter_shape));
 
     EXTRACT_AND_VERIFY_DIMENSIONS("Conv2DBackpropFilter");
     Tensor* filter_backprop = nullptr;
@@ -1185,7 +1232,6 @@ class Conv2DSlowBackpropFilterOp : public OpKernel {
           context->eigen_device<Device>(),
           const_cast<const Tensor&>(compatible_input).tensor<T, 4>(),
           transformed_input.tensor<T, 4>());
-
       auto out_backprop_ptr =
           AsDeviceMemory(transformed_out_backprop.template flat<T>().data(),
                          transformed_out_backprop.template flat<T>().size());
@@ -1196,10 +1242,16 @@ class Conv2DSlowBackpropFilterOp : public OpKernel {
           AsDeviceMemory(transformed_input.template flat<T>().data(),
                          transformed_input.template flat<T>().size());
 
+      static int64 ConvolveBackwardFilterScratchSize = GetCudnnWorkspaceLimit(
+          "TF_CUDNN_WORKSPACE_LIMIT_IN_MB", 1LL << 32  // 4GB by default
+          );
+      CudnnScratchAllocator scratch_allocator(ConvolveBackwardFilterScratchSize,
+                                              context);
       bool cudnn_launch_status =
-          stream->ThenConvolveBackwardFilter(input_desc, input_ptr, output_desc,
-                                             out_backprop_ptr, conv_desc,
-                                             filter_desc, &filter_backprop_ptr)
+          stream->ThenConvolveBackwardFilterWithScratch(
+                    input_desc, input_ptr, output_desc, out_backprop_ptr,
+                    conv_desc, filter_desc, &filter_backprop_ptr,
+                    &scratch_allocator)
               .ok();
 
       if (!cudnn_launch_status) {

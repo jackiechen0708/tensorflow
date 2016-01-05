@@ -10,7 +10,7 @@ There are three main methods of getting data into a TensorFlow program:
 
 [TOC]
 
-## Feeding {#Feeding}
+## Feeding 
 
 TensorFlow's feed mechanism lets you inject data into any Tensor in a
 computation graph. A python computation can thus feed data directly into the
@@ -23,7 +23,7 @@ that initiates computation.
 with tf.Session():
   input = tf.placeholder(tf.float32)
   classifier = ...
-  print classifier.eval(feed_dict={input: my_python_preprocessing_fn()})
+  print(classifier.eval(feed_dict={input: my_python_preprocessing_fn()}))
 ```
 
 While you can replace any Tensor with feed data, including variables and
@@ -35,7 +35,7 @@ it is executed without a feed, so you won't forget to feed it.
 
 An example using `placeholder` and feeding to train on MNIST data can be found
 in
-[`tensorflow/g3doc/tutorials/mnist/fully_connected_feed.py`](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/g3doc/tutorials/mnist/fully_connected_feed.py),
+[`tensorflow/examples/tutorials/mnist/fully_connected_feed.py`](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/examples/tutorials/mnist/fully_connected_feed.py),
 and is described in the [MNIST tutorial](../../tutorials/mnist/tf/index.md).
 
 ## Reading from files
@@ -154,7 +154,7 @@ as a field).  You write a little program that gets your data, stuffs it in an
 writes the string to a TFRecords file using the
 [`tf.python_io.TFRecordWriter` class](../../api_docs/python/python_io.md#TFRecordWriter).
 For example,
-[`tensorflow/g3doc/how_tos/reading_data/convert_to_records.py`](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/g3doc/how_tos/reading_data/convert_to_records.py)
+[`tensorflow/examples/how_tos/reading_data/convert_to_records.py`](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/examples/how_tos/reading_data/convert_to_records.py)
 converts MNIST data to this format.
 
 To read a file of TFRecords, use
@@ -163,7 +163,7 @@ the [`tf.parse_single_example`](../../api_docs/python/io_ops.md#parse_single_exa
 decoder. The `parse_single_example` op decodes the example protocol buffers into
 tensors. An MNIST example using the data produced by `convert_to_records` can be
 found in
-[`tensorflow/g3doc/how_tos/reading_data/fully_connected_reader.py`](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/g3doc/how_tos/reading_data/fully_connected_reader.py),
+[`tensorflow/examples/how_tos/reading_data/fully_connected_reader.py`](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/examples/how_tos/reading_data/fully_connected_reader.py),
 which you can compare with the `fully_connected_feed` version.
 
 ### Preprocessing
@@ -253,7 +253,7 @@ summary to the graph that indicates how full the example queue is. If you have
 enough reading threads, that summary will stay above zero.  You can
 [view your summaries as training progresses using TensorBoard](../../how_tos/summaries_and_tensorboard/index.md).
 
-### Creating threads to prefetch using `QueueRunner` objects {#QueueRunner}
+### Creating threads to prefetch using `QueueRunner` objects 
 
 The short version: many of the `tf.train` functions listed above add
 [`QueueRunner`](../../api_docs/python/train.md#QueueRunner) objects to your
@@ -264,7 +264,7 @@ will start threads that run the input pipeline, filling the example queue so
 that the dequeue to get the examples will succeed.  This is best combined with a
 [`tf.train.Coordinator`](../../api_docs/python/train.md#Coordinator) to cleanly
 shut down these threads when there are errors. If you set a limit on the number
-of epochs, that will use an epoch counter that will need to be intialized.  The
+of epochs, that will use an epoch counter that will need to be initialized. The
 recommended code pattern combining these is:
 
 ```python
@@ -287,7 +287,7 @@ try:
         sess.run(train_op)
 
 except tf.errors.OutOfRangeError:
-    print 'Done training -- epoch limit reached'
+    print('Done training -- epoch limit reached')
 finally:
     # When done, ask the threads to stop.
     coord.request_stop()
@@ -311,7 +311,7 @@ operations, so that our training loop can dequeue examples from the example
 queue.
 
 <div style="width:70%; margin-left:12%; margin-bottom:10px; margin-top:20px;">
-<img style="width:100%" src="AnimatedFileQueues.gif">
+<img style="width:100%" src="../../images/AnimatedFileQueues.gif">
 </div>
 
 The helpers in `tf.train` that create these queues and enqueuing operations add
@@ -431,13 +431,13 @@ with tf.Session() as sess:
                                     shape=training_data.shape)
   label_initializer = tf.placeholder(dtype=training_labels.dtype,
                                      shape=training_labels.shape)
-  input_data = tf.Variable(data_initalizer, trainable=False, collections=[])
-  input_labels = tf.Variable(label_initalizer, trainable=False, collections=[])
+  input_data = tf.Variable(data_initializer, trainable=False, collections=[])
+  input_labels = tf.Variable(label_initializer, trainable=False, collections=[])
   ...
   sess.run(input_data.initializer,
            feed_dict={data_initializer: training_data})
   sess.run(input_labels.initializer,
-           feed_dict={label_initializer: training_lables})
+           feed_dict={label_initializer: training_labels})
 ```
 
 Setting `trainable=False` keeps the variable out of the
@@ -455,8 +455,8 @@ multiple preprocessing threads, set the `num_threads` parameter to a number
 bigger than 1.
 
 An MNIST example that preloads the data using constants can be found in
-[`tensorflow/g3doc/how_tos/reading_data/fully_connected_preloaded.py`](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/g3doc/how_tos/reading_data/fully_connected_preloaded.py), and one that preloads the data using variables can be found in
-[`tensorflow/g3doc/how_tos/reading_data/fully_connected_preloaded_var.py`](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/g3doc/how_tos/reading_data/fully_connected_preloaded_var.py),
+[`tensorflow/examples/how_tos/reading_data/fully_connected_preloaded.py`](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/examples/how_tos/reading_data/fully_connected_preloaded.py), and one that preloads the data using variables can be found in
+[`tensorflow/examples/how_tos/reading_data/fully_connected_preloaded_var.py`](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/examples/how_tos/reading_data/fully_connected_preloaded_var.py),
 You can compare these with the `fully_connected_feed` and
 `fully_connected_reader` versions above.
 

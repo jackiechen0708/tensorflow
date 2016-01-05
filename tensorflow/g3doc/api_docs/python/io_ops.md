@@ -30,10 +30,10 @@ x = tf.placeholder(tf.float32, shape=(1024, 1024))
 y = tf.matmul(x, x)
 
 with tf.Session() as sess:
-  print sess.run(y)  # ERROR: will fail because x was not fed.
+  print(sess.run(y))  # ERROR: will fail because x was not fed.
 
   rand_array = np.random.rand(1024, 1024)
-  print sess.run(y, feed_dict={x: rand_array})  # Will succeed.
+  print(sess.run(y, feed_dict={x: rand_array}))  # Will succeed.
 ```
 
 ##### Args:
@@ -1215,8 +1215,8 @@ And the expected output is:
     The keys of the dict must match the dense_keys of the feature.
 *  <b>`dense_shapes`</b>: A list of tuples with the same length as `dense_keys`.
     The shape of the data for each dense feature referenced by `dense_keys`.
-    Required for any input tensors identified by dense_keys whose shapes are
-    anything other than [] or [1].
+    Required for any input tensors identified by `dense_keys` whose shapes are
+    anything other than `[]` or `[1]`.
 *  <b>`name`</b>: A name for this operation (optional).
 
 ##### Returns:

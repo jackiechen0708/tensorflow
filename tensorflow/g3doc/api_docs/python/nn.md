@@ -10,9 +10,10 @@ Note: Functions taking `Tensor` arguments can also take anything accepted by
 ## Activation Functions
 
 The activation ops provide different types of nonlinearities for use in neural
-networks.  These include smooth nonlinearities (`sigmoid`, `tanh`, `softplus`,
-and `softsign`), continuous but not everywhere differentiable functions (`relu`,
-`relu6`, and `relu_x`), and random regularization (`dropout`).
+networks.  These include smooth nonlinearities (`sigmoid`, `tanh`, `elu`,
+`softplus`, and `softsign`), continuous but not everywhere differentiable
+functions (`relu`, `relu6`, and `relu_x`), and random regularization
+(`dropout`).
 
 All activation ops apply componentwise, and produce a tensor of the same
 shape as the input tensor.
@@ -50,6 +51,26 @@ Computes Rectified Linear 6: `min(max(features, 0), 6)`.
 ##### Returns:
 
   A `Tensor` with the same type as `features`.
+
+
+- - -
+
+### `tf.nn.elu(features, name=None)` {#elu}
+
+Computes exponential linear: `exp(features) - 1` if < 0, `features` otherwise.
+
+See [Fast and Accurate Deep Network Learning by Exponential Linear Units (ELUs)
+](http://arxiv.org/abs/1511.07289)
+
+##### Args:
+
+
+*  <b>`features`</b>: A `Tensor`. Must be one of the following types: `float32`, `float64`.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A `Tensor`. Has the same type as `features`.
 
 
 - - -
@@ -444,7 +465,7 @@ Performs the max pooling on the input.
 
 
 *  <b>`value`</b>: A 4-D `Tensor` with shape `[batch, height, width, channels]` and
-    type `float32`, `float64`, `qint8`, `quint8`, `qint32`.
+    type `tf.float32`.
 *  <b>`ksize`</b>: A list of ints that has length >= 4.  The size of the window for
     each dimension of the input tensor.
 *  <b>`strides`</b>: A list of ints that has length >= 4.  The stride of the sliding
@@ -454,7 +475,7 @@ Performs the max pooling on the input.
 
 ##### Returns:
 
-  A `Tensor` with the same type as `value`.  The max pooled output tensor.
+  A `Tensor` with type `tf.float32`.  The max pooled output tensor.
 
 
 - - -
@@ -716,7 +737,7 @@ tensors.
 
 - - -
 
-### `tf.nn.embedding_lookup(params, ids, name=None)` {#embedding_lookup}
+### `tf.nn.embedding_lookup(params, ids, partition_strategy='mod', name=None)` {#embedding_lookup}
 
 Looks up `ids` in a list of embedding tensors.
 
@@ -726,18 +747,34 @@ tensors in `params`.  It is a generalization of
 interpreted as a partition of a larger embedding tensor.
 
 If `len(params) > 1`, each element `id` of `ids` is partitioned between
-the elements of `params` by computing `p = id % len(params)`, and is
-then used to look up the slice `params[p][id // len(params), ...]`.
+the elements of `params` according to the `partition_strategy`.
+In all strategies, if the id space does not evenly divide the number of
+partitions, each of the first `(max_id + 1) % len(params)` partitions will
+be assigned one more id.
 
-The results of the lookup are then concatenated into a dense
+If `partition_strategy` is `"mod"`, we assign each id to partition
+`p = id % len(params)`. For instance,
+13 ids are split across 5 partitions as:
+`[[0, 5, 10], [1, 6, 11], [2, 7, 12], [3, 8], [4, 9]]`
+
+If `partition_strategy` is `"div"`, we assign ids to partitions in a
+contiguous manner. In this case, 13 ids are split across 5 partitions as:
+`[[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10], [11, 12]]`
+
+The results of the lookup are concatenated into a dense
 tensor. The returned tensor has shape `shape(ids) + shape(params)[1:]`.
 
 ##### Args:
 
 
-*  <b>`params`</b>: A list of tensors with the same shape and type.
+*  <b>`params`</b>: A list of tensors with the same type and which can be concatenated
+    along dimension 0. Each `Tensor` must be appropriately sized for the given
+    `partition_strategy`.
 *  <b>`ids`</b>: A `Tensor` with type `int32` or `int64` containing the ids to be looked
     up in `params`.
+*  <b>`partition_strategy`</b>: A string specifying the partitioning strategy, relevant
+    if `len(params) > 1`. Currently `"div"` and `"mod"` are supported. Default
+    is `"mod"`.
 *  <b>`name`</b>: A name for the operation (optional).
 
 ##### Returns:
@@ -843,7 +880,7 @@ TensorFlow provides the following sampled loss functions for faster training.
 
 - - -
 
-### `tf.nn.nce_loss(weights, biases, inputs, labels, num_sampled, num_classes, num_true=1, sampled_values=None, remove_accidental_hits=False, name='nce_loss')` {#nce_loss}
+### `tf.nn.nce_loss(weights, biases, inputs, labels, num_sampled, num_classes, num_true=1, sampled_values=None, remove_accidental_hits=False, partition_strategy='mod', name='nce_loss')` {#nce_loss}
 
 Computes and returns the noise-contrastive estimation training loss.
 
@@ -851,7 +888,7 @@ See [Noise-contrastive estimation: A new estimation principle for
 unnormalized statistical models]
 (http://www.jmlr.org/proceedings/papers/v9/gutmann10a/gutmann10a.pdf).
 Also see our [Candidate Sampling Algorithms Reference]
-(http://www.tensorflow.org/extras/candidate_sampling.pdf)
+(../../extras/candidate_sampling.pdf)
 
 Note: In the case where `num_true` > 1, we assign to each target class
 the target probability 1 / `num_true` so that the target probabilities
@@ -868,7 +905,7 @@ with an otherwise unused class.
 
 *  <b>`weights`</b>: A `Tensor` of shape `[num_classes, dim]`, or a list of `Tensor`
       objects whose concatenation along dimension 0 has shape
-      [num_classes, dim].  The (possibly-sharded) class embeddings.
+      [num_classes, dim].  The (possibly-partitioned) class embeddings.
 *  <b>`biases`</b>: A `Tensor` of shape `[num_classes]`.  The class biases.
 *  <b>`inputs`</b>: A `Tensor` of shape `[batch_size, dim]`.  The forward
       activations of the input network.
@@ -885,8 +922,11 @@ with an otherwise unused class.
       `True`, this is a "Sampled Logistic" loss instead of NCE, and we are
       learning to generate log-odds instead of log probabilities.  See
       our [Candidate Sampling Algorithms Reference]
-      (http://www.tensorflow.org/extras/candidate_sampling.pdf).
+      (../../extras/candidate_sampling.pdf).
       Default is False.
+*  <b>`partition_strategy`</b>: A string specifying the partitioning strategy, relevant
+      if `len(weights) > 1`. Currently `"div"` and `"mod"` are supported.
+      Default is `"mod"`. See `tf.nn.embedding_lookup` for more details.
 *  <b>`name`</b>: A name for the operation (optional).
 
 ##### Returns:
@@ -896,7 +936,7 @@ with an otherwise unused class.
 
 - - -
 
-### `tf.nn.sampled_softmax_loss(weights, biases, inputs, labels, num_sampled, num_classes, num_true=1, sampled_values=None, remove_accidental_hits=True, name='sampled_softmax_loss')` {#sampled_softmax_loss}
+### `tf.nn.sampled_softmax_loss(weights, biases, inputs, labels, num_sampled, num_classes, num_true=1, sampled_values=None, remove_accidental_hits=True, partition_strategy='mod', name='sampled_softmax_loss')` {#sampled_softmax_loss}
 
 Computes and returns the sampled softmax training loss.
 
@@ -910,7 +950,7 @@ At inference time, you can compute full softmax probabilities with the
 expression `tf.nn.softmax(tf.matmul(inputs, weights) + biases)`.
 
 See our [Candidate Sampling Algorithms Reference]
-(http://www.tensorflow.org/extras/candidate_sampling.pdf)
+(../../extras/candidate_sampling.pdf)
 
 Also see Section 3 of http://arxiv.org/abs/1412.2007 for the math.
 
@@ -935,6 +975,9 @@ Also see Section 3 of http://arxiv.org/abs/1412.2007 for the math.
 *  <b>`remove_accidental_hits`</b>: A `bool`.  whether to remove "accidental hits"
       where a sampled class equals one of the target classes.  Default is
       True.
+*  <b>`partition_strategy`</b>: A string specifying the partitioning strategy, relevant
+      if `len(weights) > 1`. Currently `"div"` and `"mod"` are supported.
+      Default is `"mod"`. See `tf.nn.embedding_lookup` for more details.
 *  <b>`name`</b>: A name for the operation (optional).
 
 ##### Returns:
@@ -1117,7 +1160,7 @@ compute them approximately.
 
 - - -
 
-### `tf.nn.fixed_unigram_candidate_sampler(true_classes, num_true, num_sampled, unique, range_max, vocab_file='', distortion=0.0, num_reserved_ids=0, num_shards=1, shard=0, unigrams=[], seed=None, name=None)` {#fixed_unigram_candidate_sampler}
+### `tf.nn.fixed_unigram_candidate_sampler(true_classes, num_true, num_sampled, unique, range_max, vocab_file='', distortion=1.0, num_reserved_ids=0, num_shards=1, shard=0, unigrams=[], seed=None, name=None)` {#fixed_unigram_candidate_sampler}
 
 Samples a set of classes using the provided (fixed) base distribution.
 
@@ -1242,91 +1285,5 @@ target classes as noise classes for the same example.
     Values indicate positions in `sampled_candidates`.
 *  <b>`weights`</b>: A `Tensor` of type `float` and shape `[num_accidental_hits]`.
     Each value is `-FLOAT_MAX`.
-
-
-
-## Other Functions and Classes
-- - -
-
-### `tf.nn.rnn(cell, inputs, initial_state=None, dtype=None, sequence_length=None, scope=None)` {#rnn}
-
-Creates a recurrent neural network specified by RNNCell "cell".
-
-##### The simplest form of RNN network generated is:
-
-  state = cell.zero_state(...)
-  outputs = []
-  states = []
-  for input_ in inputs:
-    output, state = cell(input_, state)
-    outputs.append(output)
-    states.append(state)
-  return (outputs, states)
-
-However, a few other options are available:
-
-An initial state can be provided.
-If sequence_length is provided, dynamic calculation is performed.
-
-Dynamic calculation returns, at time t:
-  (t >= max(sequence_length)
-      ? (zeros(output_shape), zeros(state_shape))
-      : cell(input, state)
-
-Thus saving computational time when unrolling past the max sequence length.
-
-##### Args:
-
-
-*  <b>`cell`</b>: An instance of RNNCell.
-*  <b>`inputs`</b>: A length T list of inputs, each a vector with shape [batch_size].
-*  <b>`initial_state`</b>: (optional) An initial state for the RNN.  This must be
-    a tensor of appropriate type and shape [batch_size x cell.state_size].
-*  <b>`dtype`</b>: (optional) The data type for the initial state.  Required if
-    initial_state is not provided.
-*  <b>`sequence_length`</b>: An int64 vector (tensor) size [batch_size].
-*  <b>`scope`</b>: VariableScope for the created subgraph; defaults to "RNN".
-
-##### Returns:
-
-  A pair (outputs, states) where:
-    outputs is a length T list of outputs (one for each input)
-    states is a length T list of states (one state following each input)
-
-##### Raises:
-
-
-*  <b>`TypeError`</b>: If "cell" is not an instance of RNNCell.
-*  <b>`ValueError`</b>: If inputs is None or an empty list.
-
-
-- - -
-
-### `tf.nn.state_saving_rnn(cell, inputs, state_saver, state_name, sequence_length=None, scope=None)` {#state_saving_rnn}
-
-RNN that accepts a state saver for time-truncated RNN calculation.
-
-##### Args:
-
-
-*  <b>`cell`</b>: An instance of RNNCell.
-*  <b>`inputs`</b>: A length T list of inputs, each a vector with shape [batch_size].
-*  <b>`state_saver`</b>: A state saver object with methods `state` and `save_state`.
-*  <b>`state_name`</b>: The name to use with the state_saver.
-*  <b>`sequence_length`</b>: (optional) An int64 vector (tensor) size [batch_size].
-    See the documentation for rnn() for more details about sequence_length.
-*  <b>`scope`</b>: VariableScope for the created subgraph; defaults to "RNN".
-
-##### Returns:
-
-  A pair (outputs, states) where:
-    outputs is a length T list of outputs (one for each input)
-    states is a length T list of states (one state following each input)
-
-##### Raises:
-
-
-*  <b>`TypeError`</b>: If "cell" is not an instance of RNNCell.
-*  <b>`ValueError`</b>: If inputs is None or an empty list.
 
 

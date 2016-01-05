@@ -19,6 +19,7 @@ limitations under the License.
 #include <deque>
 #include <vector>
 #include "tensorflow/stream_executor/stream.h"
+#include "tensorflow/core/framework/tensor_reference.h"
 #include "tensorflow/core/lib/core/notification.h"
 #include "tensorflow/core/lib/core/threadpool.h"
 #include "tensorflow/core/lib/gtl/inlined_vector.h"
@@ -45,18 +46,18 @@ class EventMgr {
 
   ~EventMgr();
 
+  typedef gtl::InlinedVector<TensorReference, 4> TensorReferenceVector;
+
   // Takes ownership of *tensors and deletes it as soon as all events
   // currently enqueued on *stream have completed.
   inline void ThenDeleteTensors(perftools::gputools::Stream* stream,
-                                std::vector<Tensor>* tensors) {
+                                TensorReferenceVector* tensors) {
     ToFreeVector to_free;
-    ::perftools::gputools::Event* e;
     {
       mutex_lock l(mu_);
-      QueueTensors(stream, tensors, &e);
+      QueueTensors(stream, tensors);
       PollEvents(false, &to_free);
     }
-    stream->ThenRecordEvent(e);
     FreeMemory(to_free);
   }
 
@@ -70,26 +71,22 @@ class EventMgr {
   inline void ThenDeleteBuffer(perftools::gputools::Stream* stream,
                                BufRec bufrec) {
     ToFreeVector to_free;
-    ::perftools::gputools::Event* e;
     {
       mutex_lock l(mu_);
-      QueueBuffer(stream, bufrec, &e);
+      QueueBuffer(stream, bufrec);
       PollEvents(false, &to_free);
     }
-    stream->ThenRecordEvent(e);
     FreeMemory(to_free);
   }
 
   inline void ThenExecute(perftools::gputools::Stream* stream,
                           std::function<void()> func) {
     ToFreeVector to_free;
-    ::perftools::gputools::Event* e;
     {
       mutex_lock l(mu_);
-      QueueFunc(stream, func, &e);
+      QueueFunc(stream, func);
       PollEvents(false, &to_free);
     }
-    stream->ThenRecordEvent(e);
     FreeMemory(to_free);
   }
 
@@ -100,7 +97,7 @@ class EventMgr {
 
   struct InUse {
     perftools::gputools::Event* event;
-    std::vector<Tensor>* mem;
+    TensorReferenceVector* mem;
     BufRec bufrec;
     std::function<void()> func;
   };
@@ -109,7 +106,12 @@ class EventMgr {
 
   void FreeMemory(const ToFreeVector& to_free) {
     for (const auto& iu : to_free) {
-      delete iu.mem;
+      if (iu.mem != nullptr) {
+        for (auto& t : *(iu.mem)) {
+          t.Unref();
+        }
+        delete iu.mem;
+      }
       if (iu.bufrec.buf) iu.bufrec.alloc->DeallocateRaw(iu.bufrec.buf);
       // The function must be called in another thread.
       if (iu.func != nullptr) threadpool_.Schedule(iu.func);
@@ -119,27 +121,24 @@ class EventMgr {
   // Stream-enqueue an unused Event and save with it a collection of
   // Tensors and/or a BufRec to be deleted only after the Event
   // records.
-  void QueueInUse(perftools::gputools::Stream* stream, InUse in_use,
-                  ::perftools::gputools::Event** e)
+  void QueueInUse(perftools::gputools::Stream* stream, InUse in_use)
+
       EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
   void QueueTensors(perftools::gputools::Stream* stream,
-                    std::vector<Tensor>* tensors,
-                    ::perftools::gputools::Event** e)
+                    TensorReferenceVector* tensors)
       EXCLUSIVE_LOCKS_REQUIRED(mu_) {
-    QueueInUse(stream, {nullptr, tensors, BufRec(), nullptr}, e);
+    QueueInUse(stream, {nullptr, tensors, BufRec(), nullptr});
   }
 
-  void QueueBuffer(perftools::gputools::Stream* stream, BufRec bufrec,
-                   ::perftools::gputools::Event** e)
+  void QueueBuffer(perftools::gputools::Stream* stream, BufRec bufrec)
       EXCLUSIVE_LOCKS_REQUIRED(mu_) {
-    QueueInUse(stream, {nullptr, nullptr, bufrec, nullptr}, e);
+    QueueInUse(stream, {nullptr, nullptr, bufrec, nullptr});
   }
 
   void QueueFunc(perftools::gputools::Stream* stream,
-                 std::function<void()> func, ::perftools::gputools::Event** e)
-      EXCLUSIVE_LOCKS_REQUIRED(mu_) {
-    QueueInUse(stream, {nullptr, nullptr, BufRec(), func}, e);
+                 std::function<void()> func) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
+    QueueInUse(stream, {nullptr, nullptr, BufRec(), func});
   }
 
   // This function should be called at roughly the same tempo as

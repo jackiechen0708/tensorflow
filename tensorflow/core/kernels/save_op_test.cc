@@ -44,8 +44,9 @@ class SaveOpTest : public OpsTestBase {
     ASSERT_OK(NodeDefBuilder("myop", "Save")
                   .Input(FakeInput())
                   .Input(FakeInput())
-                  .Input(FakeInput(
-                      {DT_INT32, DT_FLOAT, DT_DOUBLE, DT_QINT8, DT_QINT32}))
+                  .Input(FakeInput({DT_BOOL, DT_INT32, DT_FLOAT, DT_DOUBLE,
+                                    DT_QINT8, DT_QINT32, DT_UINT8, DT_INT8,
+                                    DT_INT16, DT_STRING, DT_COMPLEX64}))
                   .Finalize(node_def()));
     ASSERT_OK(InitOp());
   }
@@ -53,8 +54,10 @@ class SaveOpTest : public OpsTestBase {
 
 TEST_F(SaveOpTest, Simple) {
   const string filename = io::JoinPath(testing::TmpDir(), "tensor_simple");
-  const string tensornames[] = {"tensor_int", "tensor_float", "tensor_double",
-                                "tensor_qint8", "tensor_qint32"};
+  const string tensornames[] = {
+      "tensor_bool",  "tensor_int",    "tensor_float",    "tensor_double",
+      "tensor_qint8", "tensor_qint32", "tensor_uint8",    "tensor_int8",
+      "tensor_int16", "tensor_string", "tensor_complex64"};
 
   MakeOp();
   // Add a file name
@@ -62,8 +65,11 @@ TEST_F(SaveOpTest, Simple) {
                    [&filename](int x) -> string { return filename; });
 
   // Add the tensor names
-  AddInput<string>(TensorShape({5}),
+  AddInput<string>(TensorShape({11}),
                    [&tensornames](int x) -> string { return tensornames[x]; });
+
+  // Add a 1-d bool tensor
+  AddInput<bool>(TensorShape({2}), [](int x) -> bool { return x != 0; });
 
   // Add a 1-d integer tensor
   AddInput<int32>(TensorShape({10}), [](int x) -> int32 { return x + 1; });
@@ -85,6 +91,24 @@ TEST_F(SaveOpTest, Simple) {
     return *reinterpret_cast<qint32*>(&x) * qint8(2);
   });
 
+  // Add a 1-d uint8 tensor
+  AddInput<uint8>(TensorShape({11}), [](int x) -> uint8 { return x + 1; });
+
+  // Add a 1-d int8 tensor
+  AddInput<int8>(TensorShape({7}), [](int x) -> int8 { return x - 7; });
+
+  // Add a 1-d int16 tensor
+  AddInput<int16>(TensorShape({7}), [](int x) -> int16 { return x - 8; });
+
+  // Add a 1-d string tensor
+  AddInput<string>(TensorShape({2}),
+                   [](int x) -> string { return x ? "yes" : "no"; });
+
+  // Add a 2-d complex64 tensor
+  AddInput<complex64>(TensorShape({2, 3}), [](int x) -> complex64 {
+    return complex64(100 + x, 200 + x);
+  });
+
   ASSERT_OK(RunOpKernel());
 
   // Check that the checkpoint file is properly written
@@ -93,6 +117,25 @@ TEST_F(SaveOpTest, Simple) {
   EXPECT_OK(reader.status());
 
   // We expect to find all saved tensors
+  {
+    // The 1-d bool tensor
+    TensorShape shape;
+    DataType type;
+    EXPECT_TRUE(reader.HasTensor("tensor_bool", &shape, &type));
+    TensorShape expected({2});
+    EXPECT_TRUE(shape.IsSameSize(expected));
+    EXPECT_EQ(DT_BOOL, type);
+
+    // We expect the tensor value to be correct.
+    TensorSlice s = TensorSlice::ParseOrDie("-");
+    bool data[2];
+    std::fill_n(data, 2, false);
+    EXPECT_TRUE(reader.CopySliceData("tensor_bool", s, data));
+    for (int i = 0; i < 2; ++i) {
+      EXPECT_EQ((i != 0), data[i]);
+    }
+  }
+
   {
     // The 1-d integer tensor
     TensorShape shape;
@@ -183,6 +226,96 @@ TEST_F(SaveOpTest, Simple) {
     EXPECT_TRUE(reader.CopySliceData("tensor_qint32", s, data));
     for (int i = 0; i < 6; ++i) {
       EXPECT_EQ(*reinterpret_cast<qint32*>(&i) * qint8(2), data[i]);
+    }
+  }
+
+  {
+    // The 1-d uint8 tensor
+    TensorShape shape;
+    DataType type;
+    EXPECT_TRUE(reader.HasTensor("tensor_uint8", &shape, &type));
+    TensorShape expected({11});
+    EXPECT_TRUE(shape.IsSameSize(expected));
+    EXPECT_EQ(DT_UINT8, type);
+
+    // We expect the tensor value to be correct.
+    TensorSlice s = TensorSlice::ParseOrDie("-");
+    uint8 data[11];
+    EXPECT_TRUE(reader.CopySliceData("tensor_uint8", s, data));
+    for (int i = 0; i < 11; ++i) {
+      EXPECT_EQ(i + 1, data[i]);
+    }
+  }
+
+  {
+    // The 1-d int8 tensor
+    TensorShape shape;
+    DataType type;
+    EXPECT_TRUE(reader.HasTensor("tensor_int8", &shape, &type));
+    TensorShape expected({7});
+    EXPECT_TRUE(shape.IsSameSize(expected));
+    EXPECT_EQ(DT_INT8, type);
+
+    // We expect the tensor value to be correct.
+    TensorSlice s = TensorSlice::ParseOrDie("-");
+    int8 data[7];
+    EXPECT_TRUE(reader.CopySliceData("tensor_int8", s, data));
+    for (int i = 0; i < 7; ++i) {
+      EXPECT_EQ(i - 7, data[i]);
+    }
+  }
+
+  {
+    // The 1-d int16 tensor
+    TensorShape shape;
+    DataType type;
+    EXPECT_TRUE(reader.HasTensor("tensor_int16", &shape, &type));
+    TensorShape expected({7});
+    EXPECT_TRUE(shape.IsSameSize(expected));
+    EXPECT_EQ(DT_INT16, type);
+
+    // We expect the tensor value to be correct.
+    TensorSlice s = TensorSlice::ParseOrDie("-");
+    int16 data[7];
+    EXPECT_TRUE(reader.CopySliceData("tensor_int16", s, data));
+    for (int i = 0; i < 7; ++i) {
+      EXPECT_EQ(i - 8, data[i]);
+    }
+  }
+
+  {
+    // The 1-d string tensor
+    TensorShape shape;
+    DataType type;
+    EXPECT_TRUE(reader.HasTensor("tensor_string", &shape, &type));
+    TensorShape expected({2});
+    EXPECT_TRUE(shape.IsSameSize(expected));
+    EXPECT_EQ(DT_STRING, type);
+
+    // We expect the tensor value to be correct.
+    TensorSlice s = TensorSlice::ParseOrDie("-");
+    string data[2];
+    EXPECT_TRUE(reader.CopySliceData("tensor_string", s, data));
+    EXPECT_EQ("no", data[0]);
+    EXPECT_EQ("yes", data[1]);
+  }
+
+  {
+    // The 2-d complex64 tensor
+    TensorShape shape;
+    DataType type;
+    EXPECT_TRUE(reader.HasTensor("tensor_complex64", &shape, &type));
+    TensorShape expected({2, 3});
+    EXPECT_TRUE(shape.IsSameSize(expected));
+    EXPECT_EQ(DT_COMPLEX64, type);
+
+    // We expect the tensor value to be correct.
+    TensorSlice s = TensorSlice::ParseOrDie("-:-");
+    complex64 data[6];
+    EXPECT_TRUE(reader.CopySliceData("tensor_complex64", s, data));
+    for (int i = 0; i < 6; ++i) {
+      EXPECT_EQ(100 + i, data[i].real());
+      EXPECT_EQ(200 + i, data[i].imag());
     }
   }
 }

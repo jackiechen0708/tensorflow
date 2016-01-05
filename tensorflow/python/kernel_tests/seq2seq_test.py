@@ -110,7 +110,7 @@ class Seq2SeqTest(tf.test.TestCase):
         cell = tf.nn.rnn_cell.BasicLSTMCell(2)
         dec, mem = tf.nn.seq2seq.embedding_rnn_seq2seq(
             enc_inp, dec_inp, cell, 2, 5)
-        sess.run([tf.variables.initialize_all_variables()])
+        sess.run([tf.initialize_all_variables()])
         res = sess.run(dec)
         self.assertEqual(len(res), 3)
         self.assertEqual(res[0].shape, (2, 5))
@@ -125,7 +125,7 @@ class Seq2SeqTest(tf.test.TestCase):
         with tf.variable_scope("proj_seq2seq"):
           dec, _ = tf.nn.seq2seq.embedding_rnn_seq2seq(
               enc_inp, dec_inp, cell, 2, 5, output_projection=(w, b))
-        sess.run([tf.variables.initialize_all_variables()])
+        sess.run([tf.initialize_all_variables()])
         res = sess.run(dec)
         self.assertEqual(len(res), 3)
         self.assertEqual(res[0].shape, (2, 2))
@@ -156,7 +156,7 @@ class Seq2SeqTest(tf.test.TestCase):
         cell = tf.nn.rnn_cell.BasicLSTMCell(2)
         dec, mem = tf.nn.seq2seq.embedding_tied_rnn_seq2seq(
             enc_inp, dec_inp, cell, 5)
-        sess.run([tf.variables.initialize_all_variables()])
+        sess.run([tf.initialize_all_variables()])
         res = sess.run(dec)
         self.assertEqual(len(res), 3)
         self.assertEqual(res[0].shape, (2, 5))
@@ -171,7 +171,7 @@ class Seq2SeqTest(tf.test.TestCase):
         with tf.variable_scope("proj_seq2seq"):
           dec, _ = tf.nn.seq2seq.embedding_tied_rnn_seq2seq(
               enc_inp, dec_inp, cell, 5, output_projection=(w, b))
-        sess.run([tf.variables.initialize_all_variables()])
+        sess.run([tf.initialize_all_variables()])
         res = sess.run(dec)
         self.assertEqual(len(res), 3)
         self.assertEqual(res[0].shape, (2, 2))
@@ -281,7 +281,7 @@ class Seq2SeqTest(tf.test.TestCase):
         with tf.variable_scope("proj_seq2seq"):
           dec, _ = tf.nn.seq2seq.embedding_attention_seq2seq(
               enc_inp, dec_inp, cell, 2, 5, output_projection=(w, b))
-        sess.run([tf.variables.initialize_all_variables()])
+        sess.run([tf.initialize_all_variables()])
         res = sess.run(dec)
         self.assertEqual(len(res), 3)
         self.assertEqual(res[0].shape, (2, 2))
@@ -349,11 +349,41 @@ class Seq2SeqTest(tf.test.TestCase):
       res = sess.run(loss_per_sequence)
       self.assertAllClose(res, np.asarray([4.828314, 4.828314]))
 
+  def testModelWithBucketsScope(self):
+    """Test that variable scope reuse is not reset after model_with_buckets."""
+    classes = 10
+    buckets = [(4, 4), (8, 8)]
+
+    with self.test_session():
+      # Here comes a sample Seq2Seq model using GRU cells.
+      def SampleGRUSeq2Seq(enc_inp, dec_inp, weights):
+        """Example sequence-to-sequence model that uses GRU cells."""
+        def GRUSeq2Seq(enc_inp, dec_inp):
+          cell = tf.nn.rnn_cell.MultiRNNCell([tf.nn.rnn_cell.GRUCell(24)] * 2)
+          return tf.nn.seq2seq.embedding_attention_seq2seq(
+              enc_inp, dec_inp, cell, classes, classes)
+        targets = [dec_inp[i+1] for i in xrange(len(dec_inp) - 1)] + [0]
+        return tf.nn.seq2seq.model_with_buckets(
+            enc_inp, dec_inp, targets, weights, buckets, classes, GRUSeq2Seq)
+
+      # Now we construct the copy model.
+      inp = [tf.placeholder(tf.int32, shape=[None]) for _ in xrange(8)]
+      out = [tf.placeholder(tf.int32, shape=[None]) for _ in xrange(8)]
+      weights = [tf.ones_like(inp[0], dtype=tf.float32) for _ in xrange(8)]
+      with tf.variable_scope("root"):
+        _ = SampleGRUSeq2Seq(inp, out, weights)
+        # Now check that we did not accidentally set reuse.
+        self.assertEqual(tf.get_variable_scope().reuse, False)
+
   def testModelWithBuckets(self):
     """Larger tests that does full sequence-to-sequence model training."""
     # We learn to copy 10 symbols in 2 buckets: length 4 and length 8.
     classes = 10
     buckets = [(4, 4), (8, 8)]
+    perplexities = [[], []]  # Results for each bucket.
+    tf.set_random_seed(111)
+    random.seed(111)
+    np.random.seed(111)
 
     with self.test_session() as sess:
       # We use sampled softmax so we keep output projection separate.
@@ -378,8 +408,7 @@ class Seq2SeqTest(tf.test.TestCase):
             softmax_loss_function=SampledLoss)
 
       # Now we construct the copy model.
-      tf.set_random_seed(111)
-      batch_size = 32
+      batch_size = 8
       inp = [tf.placeholder(tf.int32, shape=[None]) for _ in xrange(8)]
       out = [tf.placeholder(tf.int32, shape=[None]) for _ in xrange(8)]
       weights = [tf.ones_like(inp[0], dtype=tf.float32) for _ in xrange(8)]
@@ -394,26 +423,26 @@ class Seq2SeqTest(tf.test.TestCase):
           update = optimizer.apply_gradients(zip(grads, params))
           updates.append(update)
         sess.run([tf.initialize_all_variables()])
-      for ep in xrange(3):
-        log_perp = 0.0
-        for _ in xrange(50):
-          bucket = random.choice(np.arange(len(buckets)))
-          length = buckets[bucket][0]
-          i = [np.array([np.random.randint(9) + 1 for _ in xrange(batch_size)],
-                        dtype=np.int32) for _ in xrange(length)]
-          # 0 is our "GO" symbol here.
-          o = [np.array([0 for _ in xrange(batch_size)], dtype=np.int32)] + i
-          feed = {}
-          for l in xrange(length):
-            feed[inp[l].name] = i[l]
-            feed[out[l].name] = o[l]
-          if length < 8:  # For the 4-bucket, we need the 5th as target.
-            feed[out[length].name] = o[length]
-          res = sess.run([updates[bucket], losses[bucket]], feed)
-          log_perp += float(res[1])
-        perp = math.exp(log_perp / 100)
-        print("step %d avg. perp %f" % ((ep + 1) * 50, perp))
-      self.assertLess(perp, 2.5)
+      steps = 6
+      for _ in xrange(steps):
+        bucket = random.choice(np.arange(len(buckets)))
+        length = buckets[bucket][0]
+        i = [np.array([np.random.randint(9) + 1 for _ in xrange(batch_size)],
+                      dtype=np.int32) for _ in xrange(length)]
+        # 0 is our "GO" symbol here.
+        o = [np.array([0 for _ in xrange(batch_size)], dtype=np.int32)] + i
+        feed = {}
+        for l in xrange(length):
+          feed[inp[l].name] = i[l]
+          feed[out[l].name] = o[l]
+        if length < 8:  # For the 4-bucket, we need the 5th as target.
+          feed[out[length].name] = o[length]
+        res = sess.run([updates[bucket], losses[bucket]], feed)
+        perplexities[bucket].append(math.exp(float(res[1])))
+      for bucket in xrange(len(buckets)):
+        if len(perplexities[bucket]) > 1:  # Assert that perplexity went down.
+          self.assertLess(perplexities[bucket][1], perplexities[bucket][0])
+
 
 if __name__ == "__main__":
   tf.test.main()

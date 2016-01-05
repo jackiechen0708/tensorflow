@@ -9,7 +9,7 @@ CIFAR-10 classification is a common benchmark problem in machine learning.  The
 problem is to classify RGB 32x32 pixel images across 10 categories:
 ```airplane, automobile, bird, cat, deer, dog, frog, horse, ship, and truck.```
 
-![CIFAR-10 Samples](./cifar_samples.png "CIFAR-10 Samples, from http://www.cs.toronto.edu/~kriz/cifar.html")
+![CIFAR-10 Samples](../../images/cifar_samples.png "CIFAR-10 Samples, from http://www.cs.toronto.edu/~kriz/cifar.html")
 
 For more details refer to the [CIFAR-10 page](http://www.cs.toronto.edu/~kriz/cifar.html)
 and a [Tech Report](http://www.cs.toronto.edu/~kriz/learning-features-2009-TR.pdf)
@@ -105,7 +105,7 @@ adds operations that perform inference, i.e. classification, on supplied images.
 add operations that compute the loss,
 gradients, variable updates and visualization summaries.
 
-### Model Inputs {#model-inputs}
+### Model Inputs 
 
 The input part of the model is built by the functions `inputs()` and
 `distorted_inputs()` which read images from the CIFAR-10 binary data files.
@@ -126,7 +126,7 @@ artificially increase the data set size:
 
 * [Randomly flip](../../api_docs/python/image.md#random_flip_left_right) the image from left to right.
 * Randomly distort the [image brightness](../../api_docs/python/image.md#random_brightness).
-* Randomly distort the [image contrast](../../api_docs/python/image.md#tf_image_random_contrast).
+* Randomly distort the [image contrast](../../api_docs/python/image.md#random_contrast).
 
 Please see the [Images](../../api_docs/python/image.md) page for the list of
 available distortions. We also attach an
@@ -135,7 +135,7 @@ so that we may visualize them in TensorBoard.  This is a good practice to verify
 that inputs are built correctly.
 
 <div style="width:50%; margin:auto; margin-bottom:10px; margin-top:20px;">
-  <img style="width:70%" src="./cifar_image_summary.png">
+  <img style="width:70%" src="../../images/cifar_image_summary.png">
 </div>
 
 Reading images from disk and distorting them can use a non-trivial amount of
@@ -143,7 +143,7 @@ processing time. To prevent these operations from slowing down training, we run
 them inside 16 separate threads which continuously fill a TensorFlow
 [queue](../../api_docs/python/io_ops.md#shuffle_batch).
 
-### Model Prediction {#model-prediction}
+### Model Prediction 
 
 The prediction part of the model is constructed by the `inference()` function
 which adds operations to compute the *logits* of the predictions. That part of
@@ -164,7 +164,7 @@ Layer Name | Description
 Here is a graph generated from TensorBoard describing the inference operation:
 
 <div style="width:15%; margin:auto; margin-bottom:10px; margin-top:20px;">
-  <img style="width:100%" src="./cifar_graph.png">
+  <img style="width:100%" src="../../images/cifar_graph.png">
 </div>
 
 > **EXERCISE**: The output of `inference` are un-normalized logits. Try editing
@@ -182,7 +182,7 @@ layers of Alex's original model are locally connected and not fully connected.
 Try editing the architecture to exactly reproduce the locally connected
 architecture in the top layer.
 
-### Model Training {#model-training}
+### Model Training 
 
 The usual method for training a network to perform N-way classification is
 [multinomial logistic regression](https://en.wikipedia.org/wiki/Multinomial_logistic_regression),
@@ -199,7 +199,7 @@ loss and all these weight decay terms, as returned by the `loss()` function.
 
 We visualize it in TensorBoard with a [`scalar_summary`](../../api_docs/python/train.md#scalar_summary):
 
-![CIFAR-10 Loss](./cifar_loss.png "CIFAR-10 Total Loss")
+![CIFAR-10 Loss](../../images/cifar_loss.png "CIFAR-10 Total Loss")
 
 We train the model using standard
 [gradient descent](https://en.wikipedia.org/wiki/Gradient_descent)
@@ -208,7 +208,7 @@ with a learning rate that
 [exponentially decays](../../api_docs/python/train.md#exponential_decay)
 over time.
 
-![CIFAR-10 Learning Rate Decay](./cifar_lr_decay.png "CIFAR-10 Learning Rate Decay")
+![CIFAR-10 Learning Rate Decay](../../images/cifar_lr_decay.png "CIFAR-10 Learning Rate Decay")
 
 The `train()` function adds the operations needed to minimize the objective by
 calculating the gradient and updating the learned variables (see
@@ -289,8 +289,8 @@ For instance, we can watch how the distribution of activations and degree of
 sparsity in `local3` features evolve during training:
 
 <div style="width:100%; margin:auto; margin-bottom:10px; margin-top:20px; display: flex; flex-direction: row">
-  <img style="flex-grow:1; flex-shrink:1;" src="./cifar_sparsity.png">
-  <img style="flex-grow:1; flex-shrink:1;" src="./cifar_activations.png">
+  <img style="flex-grow:1; flex-shrink:1;" src="../../images/cifar_sparsity.png">
+  <img style="flex-grow:1; flex-shrink:1;" src="../../images/cifar_activations.png">
 </div>
 
 Individual loss functions, as well as the total loss, are particularly
@@ -301,7 +301,7 @@ values.  See how the scripts use
 [`ExponentialMovingAverage`](../../api_docs/python/train.md#ExponentialMovingAverage)
 for this purpose.
 
-## Evaluating a Model {#evaluating-a-model}
+## Evaluating a Model 
 
 Let us now evaluate how well the trained model performs on a hold-out data set.
 The model is evaluated by the script `cifar10_eval.py`.  It constructs the model
@@ -372,7 +372,7 @@ processing a batch of data.
 Here is a diagram of this model:
 
 <div style="width:40%; margin:auto; margin-bottom:10px; margin-top:20px;">
-  <img style="width:100%" src="./Parallelism.png">
+  <img style="width:100%" src="../../images/Parallelism.png">
 </div>
 
 Note that each GPU computes inference as well as the gradients for a unique

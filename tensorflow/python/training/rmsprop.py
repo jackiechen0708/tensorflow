@@ -39,12 +39,12 @@ from tensorflow.python.training import training_ops
 
 
 class RMSPropOptimizer(optimizer.Optimizer):
-  """Optimizer that implements the RMSProp algorithm.
+  """Optimizer that implements the RMSProp algorithm (http://www.cs.toronto.edu/~tijmen/csc321/slides/lecture_slides_lec6.pdf).
 
   @@__init__
   """
 
-  def __init__(self, learning_rate, decay, momentum=0.0, epsilon=1e-10,
+  def __init__(self, learning_rate, decay=0.9, momentum=0.0, epsilon=1e-10,
                use_locking=False, name="RMSProp"):
     """Construct a new RMSProp optimizer.
 
@@ -71,9 +71,8 @@ class RMSPropOptimizer(optimizer.Optimizer):
 
   def _create_slots(self, var_list):
     for v in var_list:
-      self._get_or_make_slot(
-          v, constant_op.constant(1.0, dtype=v.dtype, shape=v.get_shape()),
-          "rms", self._name)
+      val = constant_op.constant(1.0, dtype=v.dtype, shape=v.get_shape())
+      self._get_or_make_slot(v, val, "rms", self._name)
       self._zeros_slot(v, "momentum", self._name)
 
   def _prepare(self):

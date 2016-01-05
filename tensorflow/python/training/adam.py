@@ -29,7 +29,7 @@ from tensorflow.python.training import training_ops
 
 
 class AdamOptimizer(optimizer.Optimizer):
-  """Optimizer that implements the Adam algorithm.
+  """Optimizer that implements the Adam algorithm (http://arxiv.org/pdf/1412.6980v7.pdf).
 
   @@__init__
   """
@@ -37,8 +37,6 @@ class AdamOptimizer(optimizer.Optimizer):
   def __init__(self, learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-8,
                use_locking=False, name="Adam"):
     """Construct a new Adam optimizer.
-
-    Implementation is based on: http://arxiv.org/pdf/1412.6980v7.pdf
 
     Initialization:
 
@@ -103,8 +101,12 @@ class AdamOptimizer(optimizer.Optimizer):
     # variable.
     if self._beta1_power is None:
       with ops.device(var_list[0].device):
-        self._beta1_power = variables.Variable(self._beta1, name="beta1_power")
-        self._beta2_power = variables.Variable(self._beta2, name="beta2_power")
+        self._beta1_power = variables.Variable(self._beta1,
+                                               name="beta1_power",
+                                               trainable=False)
+        self._beta2_power = variables.Variable(self._beta2,
+                                               name="beta2_power",
+                                               trainable=False)
     # Create slots for the first and second moments.
     for v in var_list:
       self._zeros_slot(v, "m", self._name)

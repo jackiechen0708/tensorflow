@@ -29,16 +29,6 @@ limitations under the License.
 namespace Eigen {
 namespace internal {
 
-template <typename T>
-struct scalar_sign_op {
-  // TODO(zhifengc): this only works for real types. In theory,
-  // sign(x) = x / |x| works for both real and complex values.
-  EIGEN_EMPTY_STRUCT_CTOR(scalar_sign_op);
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T operator()(const T& x) const {
-    return T(x > T(0)) - T(x < T(0));
-  }
-};
-
 // TODO(zhifengc): Eigen::internal::pow_impl does not have proper
 // EIGEN host/device decoration. We duplicate code here for now.
 template <typename T, bool IsInteger>
@@ -360,7 +350,8 @@ struct sin : base<T, Eigen::internal::scalar_sin_op<T> > {};
 template <typename T>
 struct cos : base<T, Eigen::internal::scalar_cos_op<T> > {};
 
-struct logical_not : base<bool, std::logical_not<bool> > {};
+struct logical_not : base<bool, Eigen::internal::scalar_boolean_not_op<bool> > {
+};
 
 namespace impl {
 
